@@ -2,7 +2,7 @@
 
 > The developer's command-line vault: offline-first, zero-knowledge, secrets management that fits your terminal workflow.
 
-[![Go](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://golang.org)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Coverage](https://img.shields.io/badge/Coverage-90.1%25-brightgreen)]()
 
@@ -103,6 +103,19 @@ go tool cover -html=coverage.out
 # Build CLI
 go build -o zeropass ./packages/cli/
 ```
+
+## Documentation
+
+- [Project Overview & PDR](docs/project-overview-pdr.md) — Vision, target users, scope, roadmap
+- [Codebase Summary](docs/codebase-summary.md) — Architecture, module breakdown, dependencies
+- [Code Standards](docs/code-standards.md) — Go conventions, patterns, testing strategy
+- [System Architecture](docs/system-architecture.md) — Key hierarchy, encryption flow, sync protocol
+- [Project Roadmap](docs/project-roadmap.md) — Phased development plan (MVP, Sync, Extensions, Mobile)
+- [Deployment Guide](docs/deployment-guide.md) — Build, install, run, troubleshoot
+
+## Contributing
+
+Contributions welcome! Please read our code standards and submit PRs with test coverage.
 
 ## License
 
