@@ -1,0 +1,21 @@
+# ZeroPass
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+go.work.sum
+.DS_Store
+.env
+*.local
+vendor/
+dist/
+build/
+coverage.out
+coverage.html
+*.pem
+*.key
+cli

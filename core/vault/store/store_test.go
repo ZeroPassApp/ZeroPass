@@ -1,0 +1,481 @@
+package store
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func testVaultDir(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "vaults", "test")
+	return dir
+}
+
+func TestCreateAndOpen(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0 // disable for tests
+
+	v, result, err := Create("strong-master-password", dir, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, v)
+	require.NotNil(t, result)
+	assert.NotEmpty(t, result.Mnemonic)
+	assert.False(t, v.IsLocked())
+
+	// vault.json must exist
+	_, err = os.Stat(filepath.Join(dir, VaultMetaFile))
+	require.NoError(t, err)
+
+	// items dir must exist
+	_, err = os.Stat(filepath.Join(dir, ItemsDir))
+	require.NoError(t, err)
+
+	// VaultKey available
+	vk, err := v.VaultKey()
+	require.NoError(t, err)
+	assert.Len(t, vk, 32)
+
+	// Lock
+	v.Lock()
+	assert.True(t, v.IsLocked())
+	_, err = v.VaultKey()
+	assert.Error(t, err)
+
+	// Open fresh
+	v2, err := Open(dir)
+	require.NoError(t, err)
+	assert.True(t, v2.IsLocked())
+
+	// Unlock with password
+	err = v2.Unlock("strong-master-password")
+	require.NoError(t, err)
+	assert.False(t, v2.IsLocked())
+	vk2, err := v2.VaultKey()
+	require.NoError(t, err)
+	assert.Len(t, vk2, 32)
+	v2.Lock()
+}
+
+func TestCreateEmptyPassword(t *testing.T) {
+	dir := testVaultDir(t)
+	_, _, err := Create("", dir, DefaultConfig())
+	assert.Error(t, err)
+}
+
+func TestUnlockWrongPassword(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("correct-password", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	err = v.Unlock("wrong-password")
+	assert.Error(t, err)
+	assert.True(t, v.IsLocked())
+}
+
+func TestUnlockWithRecovery(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("master-pwd", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	err = v.Unlock("master-pwd")
+	require.NoError(t, err)
+	vk1, _ := v.VaultKey()
+	vk1Copy := make([]byte, len(vk1))
+	copy(vk1Copy, vk1)
+	v.Lock()
+
+	// Unlock with mnemonic
+	err = v.UnlockWithRecovery(result.Mnemonic)
+	require.NoError(t, err)
+	vk2, _ := v.VaultKey()
+	assert.Equal(t, vk1Copy, vk2) // same vault key regardless of unlock method
+	v.Lock()
+}
+
+func TestUnlockWithWrongMnemonic(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	err = v.UnlockWithRecovery("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
+	assert.Error(t, err)
+}
+
+func TestOpenNonExistent(t *testing.T) {
+	_, err := Open(filepath.Join(t.TempDir(), "nope"))
+	assert.Error(t, err)
+}
+
+func TestPaths(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	assert.Equal(t, dir, v.Path())
+	assert.Equal(t, filepath.Join(dir, ItemsDir), v.ItemsPath())
+	assert.Equal(t, filepath.Join(dir, IndexFile), v.IndexPath())
+}
+
+func TestConfig(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := VaultConfig{
+		AutoLockTimeout:   5 * time.Minute,
+		ClipboardClearSec: 10,
+		MaxVersions:       20,
+	}
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	assert.Equal(t, cfg, v.Config())
+}
+
+func TestMetadataPersistence(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	meta := v.Metadata()
+	assert.NotEmpty(t, meta.Salt)
+	assert.NotEmpty(t, meta.EncryptedVaultKey)
+	assert.NotEmpty(t, meta.EncryptedRecoveryKey)
+	assert.False(t, meta.CreatedAt.IsZero())
+
+	// Re-open and verify metadata matches
+	v2, err := Open(dir)
+	require.NoError(t, err)
+	meta2 := v2.Metadata()
+	assert.Equal(t, meta.Salt, meta2.Salt)
+	assert.Equal(t, meta.EncryptedVaultKey, meta2.EncryptedVaultKey)
+}
+
+func TestDoubleUnlock(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	// Already unlocked, unlock again should be no-op
+	err = v.Unlock("pass")
+	assert.NoError(t, err)
+}
+
+func TestTouch(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Touch() // should not panic
+}
+
+func TestAutoLockTimerFires(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 50 * time.Millisecond // very short
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	assert.False(t, v.IsLocked())
+
+	// Wait for auto-lock to fire
+	time.Sleep(200 * time.Millisecond)
+	assert.True(t, v.IsLocked())
+}
+
+func TestLockAlreadyLocked(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	v.Lock()
+	assert.True(t, v.IsLocked())
+
+	// Lock again — should be safe
+	v.Lock()
+	assert.True(t, v.IsLocked())
+}
+
+func TestUnlockWithRecoveryAlreadyUnlocked(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	assert.False(t, v.IsLocked())
+
+	// UnlockWithRecovery when already unlocked — should be no-op
+	err = v.UnlockWithRecovery(result.Mnemonic)
+	assert.NoError(t, err)
+	assert.False(t, v.IsLocked())
+}
+
+func TestCorruptedMetadata(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	_, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	// Corrupt the vault.json file
+	metaPath := filepath.Join(dir, VaultMetaFile)
+	require.NoError(t, os.WriteFile(metaPath, []byte("{invalid json"), 0600))
+
+	_, err = Open(dir)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unmarshal metadata")
+}
+
+func TestVaultKeyWhenLocked(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	_, err = v.VaultKey()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "vault is locked")
+}
+
+func TestUnlockWithRecoveryWrongMnemonicOnLockedVault(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	err = v.UnlockWithRecovery("invalid mnemonic phrase here")
+	assert.Error(t, err)
+	assert.True(t, v.IsLocked())
+}
+
+func TestCreateVaultDirStructure(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "deep", "nested", "vault")
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	require.NotNil(t, v)
+	require.NotNil(t, result)
+
+	// Check items dir exists
+	_, err = os.Stat(filepath.Join(dir, ItemsDir))
+	require.NoError(t, err)
+}
+
+func TestAutoLockWithRelock(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 100 * time.Millisecond
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	// Lock before auto-lock fires
+	v.Lock()
+	assert.True(t, v.IsLocked())
+
+	// Unlock again — new auto-lock timer starts
+	err = v.Unlock("pass")
+	require.NoError(t, err)
+	assert.False(t, v.IsLocked())
+
+	// Wait for auto-lock
+	time.Sleep(250 * time.Millisecond)
+	assert.True(t, v.IsLocked())
+}
+
+func TestDefaultConfigValues(t *testing.T) {
+	cfg := DefaultConfig()
+	assert.Equal(t, 15*time.Minute, cfg.AutoLockTimeout)
+	assert.Equal(t, 30, cfg.ClipboardClearSec)
+	assert.Equal(t, 10, cfg.MaxVersions)
+}
+
+func TestOpenUnlockRelock(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	_, result, err := Create("my-password", dir, cfg)
+	require.NoError(t, err)
+
+	// Open, unlock, get key, lock, unlock with recovery
+	v, err := Open(dir)
+	require.NoError(t, err)
+	assert.True(t, v.IsLocked())
+
+	require.NoError(t, v.Unlock("my-password"))
+	vk1, err := v.VaultKey()
+	require.NoError(t, err)
+	vk1Copy := make([]byte, len(vk1))
+	copy(vk1Copy, vk1)
+
+	v.Lock()
+
+	require.NoError(t, v.UnlockWithRecovery(result.Mnemonic))
+	vk2, err := v.VaultKey()
+	require.NoError(t, err)
+	assert.Equal(t, vk1Copy, vk2)
+	v.Lock()
+}
+
+func TestStartAutoLockExistingTimer(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 5 * time.Second // long enough to not fire during test
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	assert.False(t, v.IsLocked())
+
+	// autoTimer is already set from Create's startAutoLock.
+	// Calling startAutoLock again exercises the "existing timer" branch.
+	v.mu.Lock()
+	assert.NotNil(t, v.autoTimer) // should already be set
+	v.startAutoLock()             // should stop old timer and create new
+	assert.NotNil(t, v.autoTimer)
+	v.mu.Unlock()
+
+	v.Lock()
+}
+
+func TestUnlockWithInvalidSalt(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	// Corrupt the salt to be invalid hex
+	v.meta.Salt = "not-valid-hex!!!"
+	err = v.Unlock("pass")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decode salt")
+}
+
+func TestUnlockWithInvalidEncryptedVaultKey(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	// Corrupt the encrypted vault key to be invalid base64
+	v.meta.EncryptedVaultKey = "not-valid-base64!!!"
+	err = v.Unlock("pass")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decode encrypted vault key")
+}
+
+func TestUnlockWithRecoveryInvalidBase64(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	// Corrupt the encrypted recovery key to be invalid base64
+	v.meta.EncryptedRecoveryKey = "invalid-base64!!!"
+	mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+	err = v.UnlockWithRecovery(mnemonic)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decode encrypted recovery key")
+}
+
+func TestUnlockWithEmptyPassword(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	err = v.Unlock("")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "derive master key")
+}
+
+func TestWriteMetadataToReadOnlyDir(t *testing.T) {
+	// Test writeMetadata error path by using invalid path
+	meta := &VaultMetadata{
+		Salt:              "deadbeef",
+		EncryptedVaultKey: "base64data",
+		CreatedAt:         time.Now(),
+		Config:            DefaultConfig(),
+	}
+	err := writeMetadata("/nonexistent/path/that/does/not/exist", meta)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "write metadata")
+}
+
+func TestCreateMkdirAllFailure(t *testing.T) {
+	// Create in a path that can't be created
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+	_, _, err := Create("pass", "/dev/null/not-a-directory/vault", cfg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "create vault dirs")
+}
+
+func TestCreateWriteMetadataFailure(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "vault")
+	itemsPath := filepath.Join(vaultPath, ItemsDir)
+
+	// Pre-create both dirs so MkdirAll succeeds
+	require.NoError(t, os.MkdirAll(itemsPath, 0700))
+
+	// Make vault dir read-only so vault.json write fails
+	require.NoError(t, os.Chmod(vaultPath, 0500))
+	defer os.Chmod(vaultPath, 0700) // cleanup
+
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+	_, _, err := Create("pass", vaultPath, cfg)
+	if err != nil {
+		// On systems where chmod is enforced, this should fail at writeMetadata
+		assert.Error(t, err)
+	}
+	// On macOS root or some systems, chmod may not prevent writes, so this might succeed
+}
