@@ -8,17 +8,28 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var vault: VaultClient
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        Group {
+            switch vault.state {
+            case .noVault:
+                WelcomeView()
+            case .locked:
+                UnlockVaultView()
+            case .showingRecovery(let mnemonic):
+                RecoveryPhraseView(mnemonic: mnemonic)
+            case .unlocked:
+                MainShellView()
+            }
         }
-        .padding()
+        .task {
+            await vault.restoreLastVaultIfAvailable()
+        }
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(VaultClient())
 }

@@ -57,6 +57,26 @@ go build -o syncserver ./services/syncserver/
 ./syncserver --help
 ```
 
+### Build macOS app (SwiftUI)
+
+Prereqs: Xcode (`xcodebuild`, macOS SDK tools like `lipo`), Go (per `go.mod`), and `make`.
+
+```bash
+# Run macOS app tests (no signing)
+xcodebuild test \
+  -project apps/macos/ZeroPass/ZeroPass.xcodeproj \
+  -scheme ZeroPass \
+  -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+# Archive (Release). Produces: dist/macos/ZeroPass.xcarchive
+CODE_SIGNING_ALLOWED=NO bash apps/macos/scripts/build.sh
+```
+
+Notes:
+- The Xcode project builds the Go bridge as part of the app target via a build phase that runs `make -C bridge build-universal`.
+- Optional packaging scripts live in `apps/macos/scripts/` (e.g. `create-dmg.sh`, `notarize.sh`).
+
 ### Cross-Compile
 
 ```bash

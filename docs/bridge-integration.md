@@ -3,6 +3,24 @@
 This repo includes a CGO-based "bridge" that exposes core vault functionality over a C ABI.
 The bridge is intended to be called from a host app (e.g. SwiftUI) that owns UI + lifecycle.
 
+## Building the bridge static library (macOS)
+
+Prereqs: Go, Xcode command line tools (for `clang`/`lipo`), and `make`.
+
+```bash
+# Universal (arm64 + x86_64) static library + header
+make -C bridge build-universal
+```
+
+Outputs (by default in `bridge/`):
+- `bridge/libzeropass.a` (universal)
+- `bridge/libzeropass.h` (generated; includes bridge exports)
+- `bridge/zp_bridge.h` (defines `ZPResult`)
+
+Host app note (SwiftUI):
+- The macOS Xcode target runs `make -C bridge build-universal OUT_DIR="$(TARGET_TEMP_DIR)/zeropass_bridge"` automatically during builds.
+- The build phase also normalizes `PATH` for Xcode GUI builds so Homebrew Go (e.g. `/opt/homebrew/bin/go`) is discoverable.
+
 ## Result model + memory management
 
 All exported bridge functions return:
@@ -12,7 +30,10 @@ All exported bridge functions return:
 - `ZPResult.error` (char*) — error string on failure; may be NULL
 
 The caller must free returned strings using:
-- `ZPFreeResult(result)` (frees both `data` and `error`)
+- `ZPFreeResult(result)` — frees both `data` and `error`
+- `ZPFreeResultPtr(&result)` — same, but also NULLs fields and resets `code`
+
+`ZPFree*` wipes the C string contents (via `memset`) before freeing to reduce secret remanence.
 
 ## Error codes
 

@@ -479,7 +479,7 @@ func TestListItemsNonExistentDir(t *testing.T) {
 
 	items, err := m.ListItems(types.ItemFilter{})
 	require.NoError(t, err)
-	assert.Nil(t, items)
+	assert.Len(t, items, 0)
 }
 
 func TestListItemsSkipsDirectories(t *testing.T) {

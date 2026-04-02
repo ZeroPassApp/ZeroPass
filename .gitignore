@@ -14,6 +14,7 @@ go.work.sum
 vendor/
 dist/
 build/
+.build/
 coverage.out
 coverage.html
 *.pem
@@ -25,9 +26,12 @@ syncserver
 bridge/*.a
 bridge/*.h
 bridge/*.tmp
+bridge/bridge
 
 # Xcode
 DerivedData/
+.derivedData-cli/
+.derivedData-release/
 xcuserdata/
 *.xcuserdatad/
 *.xcuserstate

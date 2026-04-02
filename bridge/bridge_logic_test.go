@@ -10,7 +10,7 @@ import (
 	"github.com/zeropass/zeropass/core/vault/types"
 )
 
-func requireOKGo(t *testing.T, r goResult) string {
+func requireOKGo(t testing.TB, r goResult) string {
 	t.Helper()
 	if r.code != 0 {
 		t.Fatalf("expected ok, got code=%d err=%q data=%q", r.code, r.err, r.data)
@@ -21,7 +21,7 @@ func requireOKGo(t *testing.T, r goResult) string {
 	return r.data
 }
 
-func requireErrGo(t *testing.T, r goResult) (code int, errStr string) {
+func requireErrGo(t testing.TB, r goResult) (code int, errStr string) {
 	t.Helper()
 	if r.code == 0 {
 		t.Fatalf("expected error, got ok")

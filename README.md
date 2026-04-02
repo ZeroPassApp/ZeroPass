@@ -111,6 +111,31 @@ go tool cover -html=coverage.out
 go build -o zeropass ./packages/cli/
 ```
 
+### macOS app (SwiftUI)
+
+Prereqs: Xcode (for `xcodebuild`/`lipo`), Go (per `go.mod`), and `make`.
+
+Note: Xcode GUI builds may run with a minimal `PATH`. The ZeroPass Xcode target’s build phase exports `PATH` to include common Go install locations (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/local/go/bin`) so `go` is found. If your Go is installed elsewhere, update the build phase script accordingly.
+
+```bash
+# Run macOS app unit tests (no signing)
+xcodebuild test \
+  -project apps/macos/ZeroPass/ZeroPass.xcodeproj \
+  -scheme ZeroPass \
+  -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+# Create an unsigned Release archive at dist/macos/ZeroPass.xcarchive
+CODE_SIGNING_ALLOWED=NO bash apps/macos/scripts/build.sh
+```
+
+## CI
+
+GitHub Actions workflow: [`.github/workflows/macos-build.yml`](.github/workflows/macos-build.yml)
+- runs `go test ./...`
+- runs the macOS app tests via `xcodebuild` (no signing)
+- on tags `v*`, archives the macOS app and uploads `dist/macos/ZeroPass.xcarchive` as an artifact
+
 ## Documentation
 
 - [Project Overview & PDR](docs/project-overview-pdr.md) — Vision, target users, scope, roadmap
