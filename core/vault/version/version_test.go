@@ -1,6 +1,7 @@
 package version
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -8,14 +9,20 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zeropass/zeropass/core/crypto/key"
 	"github.com/zeropass/zeropass/core/vault/types"
 )
+
+func testVaultKeyFn() func() ([]byte, error) {
+	vk := bytes.Repeat([]byte{0x11}, key.VaultKeySize)
+	return func() ([]byte, error) { return vk, nil }
+}
 
 func testVersionManager(t *testing.T) *Manager {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	return NewManager(dir, 10)
+	return NewManager(dir, testVaultKeyFn(), 10)
 }
 
 func sampleItem(version int) *types.Item {
@@ -50,7 +57,7 @@ func TestSaveAndGetHistory(t *testing.T) {
 func TestMaxVersionsTrimming(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 3) // keep only 3 versions
+	m := NewManager(dir, testVaultKeyFn(), 3) // keep only 3 versions
 
 	for i := 1; i <= 5; i++ {
 		item := &types.Item{
@@ -151,21 +158,21 @@ func TestGetHistoryNoFile(t *testing.T) {
 func TestDefaultMaxVersions(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 0) // should default to 10
+	m := NewManager(dir, testVaultKeyFn(), 0) // should default to 10
 	assert.Equal(t, 10, m.maxVersions)
 }
 
 func TestNegativeMaxVersions(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, -5) // should default to 10
+	m := NewManager(dir, testVaultKeyFn(), -5) // should default to 10
 	assert.Equal(t, 10, m.maxVersions)
 }
 
 func TestLoadHistoryCorruptedJSON(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	// Write corrupted JSON to the version file
 	fp := filepath.Join(dir, "item-corrupt.versions.json")
@@ -179,7 +186,7 @@ func TestLoadHistoryCorruptedJSON(t *testing.T) {
 func TestLoadHistoryEmptyFile(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	// Write empty file
 	fp := filepath.Join(dir, "item-empty.versions.json")
@@ -193,7 +200,7 @@ func TestLoadHistoryEmptyFile(t *testing.T) {
 func TestLoadHistoryWhitespaceFile(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	// Write whitespace-only file
 	fp := filepath.Join(dir, "item-ws.versions.json")
@@ -207,7 +214,7 @@ func TestLoadHistoryWhitespaceFile(t *testing.T) {
 func TestSaveVersionCreatesDir(t *testing.T) {
 	// Use a path that doesn't exist yet — saveHistory should create it
 	dir := filepath.Join(t.TempDir(), "nonexistent", "items")
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	item := &types.Item{
 		ID:      "item-new",
@@ -233,7 +240,7 @@ func TestRestoreVersionNoHistory(t *testing.T) {
 func TestRestoreVersionFromCorruptedFile(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	fp := filepath.Join(dir, "item-bad.versions.json")
 	require.NoError(t, os.WriteFile(fp, []byte("not json at all"), 0600))
@@ -265,7 +272,7 @@ func TestSaveVersionAppendsToExisting(t *testing.T) {
 func TestMaxVersionsExactlyAtLimit(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 3)
+	m := NewManager(dir, testVaultKeyFn(), 3)
 
 	for i := 1; i <= 3; i++ {
 		require.NoError(t, m.SaveVersion(&types.Item{
@@ -295,14 +302,14 @@ func TestDeleteHistoryThenRestore(t *testing.T) {
 }
 
 func TestVersionFilePath(t *testing.T) {
-	m := NewManager("/tmp/items", 10)
+	m := NewManager("/tmp/items", testVaultKeyFn(), 10)
 	assert.Equal(t, "/tmp/items/my-id.versions.json", m.versionFilePath("my-id"))
 }
 
 func TestSaveVersionOverwriteOldVersions(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 2) // keep only 2
+	m := NewManager(dir, testVaultKeyFn(), 2) // keep only 2
 
 	for i := 1; i <= 5; i++ {
 		item := &types.Item{
@@ -322,7 +329,7 @@ func TestSaveVersionOverwriteOldVersions(t *testing.T) {
 func TestRestoreToLatestVersion(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	for i := 1; i <= 3; i++ {
 		require.NoError(t, m.SaveVersion(&types.Item{
@@ -341,7 +348,7 @@ func TestRestoreToLatestVersion(t *testing.T) {
 func TestRestoreVersionOutOfBounds(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	require.NoError(t, m.SaveVersion(&types.Item{
 		ID:      "bounded",
@@ -357,7 +364,7 @@ func TestRestoreVersionOutOfBounds(t *testing.T) {
 func TestDeleteHistoryThenGet(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	require.NoError(t, m.SaveVersion(&types.Item{
 		ID:   "delete-then-get",
@@ -373,7 +380,7 @@ func TestDeleteHistoryThenGet(t *testing.T) {
 func TestGetVersionHistoryUnreadableFile(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	// Create a version file that's a directory (causes read error, not IsNotExist)
 	versionFile := filepath.Join(dir, "unreadable.versions.json")
@@ -385,7 +392,7 @@ func TestGetVersionHistoryUnreadableFile(t *testing.T) {
 
 func TestSaveVersionToUnwritableDir(t *testing.T) {
 	// Use a path that definitely can't be written to
-	m := NewManager("/nonexistent/deeply/nested/path/items", 10)
+	m := NewManager("/nonexistent/deeply/nested/path/items", testVaultKeyFn(), 10)
 	err := m.SaveVersion(&types.Item{
 		ID:   "cant-write",
 		Name: "v1",
@@ -396,7 +403,7 @@ func TestSaveVersionToUnwritableDir(t *testing.T) {
 func TestDeleteHistoryNonExistentFile(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
 	require.NoError(t, os.MkdirAll(dir, 0700))
-	m := NewManager(dir, 10)
+	m := NewManager(dir, testVaultKeyFn(), 10)
 
 	// Should not error for non-existent history
 	err := m.DeleteHistory("does-not-exist")

@@ -119,8 +119,9 @@ type Vault struct {
 	locked   bool
 
 	// auto-lock
-	lastAccess time.Time
-	autoTimer  *time.Timer
+	lastAccess        time.Time
+	autoTimer         *time.Timer
+	autoLockDisabled  bool // runtime-only (not persisted)
 }
 
 const vaultKeyCheckMagic = "zeropass:vault-key-check:v1"
@@ -452,7 +453,14 @@ func (v *Vault) Lock() {
 func (v *Vault) lockInternal() {
 	// Encrypt the index file before zeroing key material.
 	if v.vaultKey != nil {
-		_ = index.EncryptIndexFile(v.IndexPath(), v.vaultKey)
+		if err := index.EncryptIndexFile(v.IndexPath(), v.vaultKey); err != nil {
+			// Fail-closed: index is derived data; don't risk leaving plaintext at rest.
+			_ = os.Remove(v.IndexPath())
+			_ = os.Remove(v.IndexPath() + "-wal")
+			_ = os.Remove(v.IndexPath() + "-shm")
+			_ = os.Remove(v.IndexPath() + ".enc")
+			_ = os.Remove(v.IndexPath() + ".enc.tmp")
+		}
 		crypto.ZeroBytes(v.vaultKey)
 		v.vaultKey = nil
 	}
@@ -506,6 +514,18 @@ func (v *Vault) Config() VaultConfig {
 	return v.meta.Config
 }
 
+// DisableAutoLock disables the vault's built-in auto-lock timer for this process.
+// It does not persist the change to disk.
+func (v *Vault) DisableAutoLock() {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	v.autoLockDisabled = true
+	if v.autoTimer != nil {
+		v.autoTimer.Stop()
+		v.autoTimer = nil
+	}
+}
+
 // Touch refreshes the last-access time (resets auto-lock timer).
 func (v *Vault) Touch() {
 	v.mu.Lock()
@@ -515,7 +535,11 @@ func (v *Vault) Touch() {
 
 // startAutoLock starts the auto-lock timer if configured.
 func (v *Vault) startAutoLock() {
-	if v.meta.Config.AutoLockTimeout <= 0 {
+	if v.autoLockDisabled || v.meta.Config.AutoLockTimeout <= 0 {
+		if v.autoTimer != nil {
+			v.autoTimer.Stop()
+			v.autoTimer = nil
+		}
 		return
 	}
 	if v.autoTimer != nil {
