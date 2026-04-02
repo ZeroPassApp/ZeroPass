@@ -3012,7 +3012,6 @@ func createVaultWithItems(t *testing.T) string {
 
 	idx, err := index.Open(v.IndexPath())
 	require.NoError(t, err)
-	defer idx.Close()
 
 	vk, err := v.VaultKey()
 	require.NoError(t, err)
@@ -3045,6 +3044,8 @@ func createVaultWithItems(t *testing.T) string {
 	}
 	require.NoError(t, mgr.AddItem(noteItem))
 
+	// Close index before locking — ensures WAL is flushed before encryption.
+	idx.Close()
 	v.Lock()
 	return vaultPath
 }
@@ -5874,4 +5875,390 @@ func TestRunDelete_CancelConfirmation(t *testing.T) {
 
 	err := runDelete(deleteCmd, []string{"Test Note"})
 	require.NoError(t, err) // Should succeed (just cancels)
+}
+
+// ---------- runImport additional format tests ----------
+
+func TestRunImport_ChromeSuccess(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	csvContent := "name,url,username,password\nChrome Site,https://chrome.example.com,chromeuser,chromepass\n"
+	csvFile := filepath.Join(dir, "chrome.csv")
+	require.NoError(t, os.WriteFile(csvFile, []byte(csvContent), 0644))
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	flagOutput = "json"
+	importFrom = "chrome"
+	importFile = csvFile
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runImport(importCmd, nil)
+		require.NoError(t, err)
+	})
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, float64(1), result["imported"])
+}
+
+func TestRunImport_FirefoxSuccess(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	csvContent := "url,username,password,httpRealm,formActionOrigin,guid,timeCreated,timeLastUsed,timePasswordChanged\nhttps://ff.example.com,ffuser,ffpass,,,guid1,0,0,0\n"
+	csvFile := filepath.Join(dir, "firefox.csv")
+	require.NoError(t, os.WriteFile(csvFile, []byte(csvContent), 0644))
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	flagOutput = "text"
+	importFrom = "firefox"
+	importFile = csvFile
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	err = runImport(importCmd, nil)
+	require.NoError(t, err)
+}
+
+func TestRunImport_1PasswordSuccess(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	csvContent := "Title,Website,Username,Password,Notes,Type\n1Pass Site,https://1p.example.com,user1p,pass1p,some notes,login\n"
+	csvFile := filepath.Join(dir, "1password.csv")
+	require.NoError(t, os.WriteFile(csvFile, []byte(csvContent), 0644))
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	flagOutput = "json"
+	importFrom = "1password"
+	importFile = csvFile
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runImport(importCmd, nil)
+		require.NoError(t, err)
+	})
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, float64(1), result["imported"])
+}
+
+func TestRunImport_BitwardenJSONSuccess(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	bwJSON := `{"items":[{"name":"BW Site","type":1,"notes":"bw note","login":{"username":"bwuser","password":"bwpass","uris":[{"uri":"https://bw.example.com"}]}}]}`
+	jsonFile := filepath.Join(dir, "bitwarden.json")
+	require.NoError(t, os.WriteFile(jsonFile, []byte(bwJSON), 0644))
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	flagOutput = "json"
+	importFrom = "bitwarden"
+	importFile = jsonFile
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runImport(importCmd, nil)
+		require.NoError(t, err)
+	})
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, float64(1), result["imported"])
+}
+
+func TestRunImport_EmptyCSV(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	// Header only, no data rows
+	csvContent := "name,url,username,password,notes\n"
+	csvFile := filepath.Join(dir, "empty.csv")
+	require.NoError(t, os.WriteFile(csvFile, []byte(csvContent), 0644))
+
+	origPath := flagVaultPath
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	importFrom = "csv"
+	importFile = csvFile
+	defer func() {
+		flagVaultPath = origPath
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	err = runImport(importCmd, nil)
+	require.NoError(t, err)
+}
+
+// ---------- runRun additional error paths ----------
+
+func TestRunRun_NoArgs(t *testing.T) {
+	err := runRun(runCmd, []string{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no command specified")
+}
+
+func TestRunRun_CommandNotFound(t *testing.T) {
+	dir := t.TempDir()
+	envFile := filepath.Join(dir, ".env")
+	require.NoError(t, os.WriteFile(envFile, []byte("PLAIN=value\n"), 0600))
+
+	origEnvFile := runEnvFile
+	origEnvName := runEnvName
+	defer func() {
+		runEnvFile = origEnvFile
+		runEnvName = origEnvName
+	}()
+
+	runEnvFile = envFile
+	runEnvName = ""
+
+	err := runRun(runCmd, []string{"nonexistent_binary_xyz_12345"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "command not found")
+}
+
+func TestRunRun_MissingEnvFile(t *testing.T) {
+	origEnvFile := runEnvFile
+	origEnvName := runEnvName
+	defer func() {
+		runEnvFile = origEnvFile
+		runEnvName = origEnvName
+	}()
+
+	runEnvFile = filepath.Join(t.TempDir(), "nonexistent.env")
+	runEnvName = ""
+
+	err := runRun(runCmd, []string{"echo", "hello"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse env file")
+}
+
+// ---------- runGet additional paths ----------
+
+func TestRunGet_CustomField(t *testing.T) {
+	// Create vault with an item that has custom fields
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "get-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+
+	idx, err := index.Open(v.IndexPath())
+	require.NoError(t, err)
+	vk, err := v.VaultKey()
+	require.NoError(t, err)
+	mgr := item.NewManager(v.ItemsPath(), func() ([]byte, error) { return vk, nil }, idx)
+
+	itm := &types.Item{
+		Name:         "Custom Item",
+		Type:         types.ItemTypeLogin,
+		Fields:       map[string]string{types.FieldUsername: "user1"},
+		CustomFields: map[string]string{"mytoken": "secret-token-value"},
+	}
+	require.NoError(t, mgr.AddItem(itm))
+	idx.Close()
+	v.Lock()
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origField := getField
+	origJSON := getJSON
+	origCopy := getCopy
+	flagVaultPath = vaultPath
+	flagOutput = "text"
+	getField = "mytoken"
+	getJSON = false
+	getCopy = false
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		getField = origField
+		getJSON = origJSON
+		getCopy = origCopy
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runGet(getCmd, []string{"Custom Item"})
+		require.NoError(t, err)
+	})
+
+	assert.Contains(t, output, "secret-token-value")
+}
+
+func TestRunGet_CustomFieldJSON(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "get-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+
+	idx, err := index.Open(v.IndexPath())
+	require.NoError(t, err)
+	vk, err := v.VaultKey()
+	require.NoError(t, err)
+	mgr := item.NewManager(v.ItemsPath(), func() ([]byte, error) { return vk, nil }, idx)
+
+	itm := &types.Item{
+		Name:         "Token Item",
+		Type:         types.ItemTypeLogin,
+		Fields:       map[string]string{types.FieldUsername: "user1"},
+		CustomFields: map[string]string{"api_token": "tok_123"},
+	}
+	require.NoError(t, mgr.AddItem(itm))
+	idx.Close()
+	v.Lock()
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origField := getField
+	origJSON := getJSON
+	origCopy := getCopy
+	flagVaultPath = vaultPath
+	flagOutput = "json"
+	getField = "api_token"
+	getJSON = true
+	getCopy = false
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		getField = origField
+		getJSON = origJSON
+		getCopy = origCopy
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runGet(getCmd, []string{"Token Item"})
+		require.NoError(t, err)
+	})
+
+	var result map[string]string
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, "api_token", result["field"])
+	assert.Equal(t, "tok_123", result["value"])
+}
+
+func TestRunGet_JSONFlagSetsOutput(t *testing.T) {
+	vaultPath := createVaultWithItems(t)
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origField := getField
+	origJSON := getJSON
+	origCopy := getCopy
+	flagVaultPath = vaultPath
+	flagOutput = "text"
+	getField = ""
+	getJSON = true
+	getCopy = false
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		getField = origField
+		getJSON = origJSON
+		getCopy = origCopy
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runGet(getCmd, []string{"Test Login"})
+		require.NoError(t, err)
+	})
+
+	// When --json flag is set, output should be valid JSON
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, "Test Login", result["name"])
 }

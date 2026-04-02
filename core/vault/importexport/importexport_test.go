@@ -531,3 +531,412 @@ func TestSafeCol(t *testing.T) {
 	assert.Equal(t, "", safeCol(row, -1)) // negative
 	assert.Equal(t, "", safeCol(nil, 0))  // nil row
 }
+
+// --- Safari import tests ---
+
+const safariCSV = `Title,URL,Username,Password,Notes,OTPAuth
+GitHub,https://github.com,devuser,s3cure!,My GitHub account,otpauth://totp/GitHub?secret=ABC
+AWS Console,https://aws.amazon.com,admin,Cl0udP@ss,,
+Personal Blog,https://blog.example.com,blogger,bl0gP@ss,My blog,
+`
+
+func TestImportSafari(t *testing.T) {
+	items, err := ImportSafari(strings.NewReader(safariCSV))
+	require.NoError(t, err)
+	require.Len(t, items, 3)
+
+	assert.Equal(t, "GitHub", items[0].Name)
+	assert.Equal(t, types.ItemTypeLogin, items[0].Type)
+	assert.Equal(t, "https://github.com", items[0].Fields[types.FieldURL])
+	assert.Equal(t, "devuser", items[0].Fields[types.FieldUsername])
+	assert.Equal(t, "s3cure!", items[0].Fields[types.FieldPassword])
+	assert.Equal(t, "My GitHub account", items[0].Notes)
+	assert.Equal(t, "otpauth://totp/GitHub?secret=ABC", items[0].Fields[types.FieldTOTP])
+
+	assert.Equal(t, "AWS Console", items[1].Name)
+	assert.Equal(t, "admin", items[1].Fields[types.FieldUsername])
+	assert.Empty(t, items[1].Fields[types.FieldTOTP])
+	assert.Empty(t, items[1].Notes)
+
+	assert.Equal(t, "Personal Blog", items[2].Name)
+	assert.Empty(t, items[2].Fields[types.FieldTOTP])
+	assert.Equal(t, "My blog", items[2].Notes)
+}
+
+func TestImportSafariEmpty(t *testing.T) {
+	items, err := ImportSafari(strings.NewReader(""))
+	require.NoError(t, err)
+	assert.Nil(t, items)
+}
+
+func TestImportSafariHeaderOnly(t *testing.T) {
+	items, err := ImportSafari(strings.NewReader("Title,URL,Username,Password,Notes,OTPAuth\n"))
+	require.NoError(t, err)
+	assert.Nil(t, items)
+}
+
+func TestImportSafariSpecialChars(t *testing.T) {
+	csv := "Title,URL,Username,Password,Notes,OTPAuth\n\"My \"\"Special\"\" Site\",https://example.com,\"user@email.com\",\"p@ss,word!\",\"Notes with\nnewline\",\n"
+	items, err := ImportSafari(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "My \"Special\" Site", items[0].Name)
+	assert.Equal(t, "user@email.com", items[0].Fields[types.FieldUsername])
+	assert.Equal(t, "p@ss,word!", items[0].Fields[types.FieldPassword])
+}
+
+func TestImportSafariNameFallbackToURL(t *testing.T) {
+	csv := "Title,URL,Username,Password,Notes,OTPAuth\n,https://example.com,user,pass,,\n"
+	items, err := ImportSafari(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "https://example.com", items[0].Name)
+}
+
+// --- LastPass import tests ---
+
+const lastPassCSV = `url,username,password,totp,extra,name,grouping,fav
+https://github.com,devuser,s3cure!,otpauth://totp/GH?secret=XYZ,GitHub notes,GitHub,Development\Git,1
+https://aws.amazon.com,admin,Cl0udP@ss,,,AWS Console,Cloud\AWS,0
+http://sn,,,,This is a secure note,My Secret Note,Notes,0
+`
+
+func TestImportLastPass(t *testing.T) {
+	items, err := ImportLastPass(strings.NewReader(lastPassCSV))
+	require.NoError(t, err)
+	require.Len(t, items, 3)
+
+	// First item: full login with TOTP, tags, favorite
+	assert.Equal(t, "GitHub", items[0].Name)
+	assert.Equal(t, types.ItemTypeLogin, items[0].Type)
+	assert.Equal(t, "https://github.com", items[0].Fields[types.FieldURL])
+	assert.Equal(t, "devuser", items[0].Fields[types.FieldUsername])
+	assert.Equal(t, "s3cure!", items[0].Fields[types.FieldPassword])
+	assert.Equal(t, "otpauth://totp/GH?secret=XYZ", items[0].Fields[types.FieldTOTP])
+	assert.Equal(t, "GitHub notes", items[0].Notes)
+	assert.Equal(t, []string{"Development", "Git"}, items[0].Tags)
+	assert.True(t, items[0].Favorite)
+
+	// Second item: login without TOTP, not favorite
+	assert.Equal(t, "AWS Console", items[1].Name)
+	assert.Equal(t, types.ItemTypeLogin, items[1].Type)
+	assert.Empty(t, items[1].Fields[types.FieldTOTP])
+	assert.Equal(t, []string{"Cloud", "AWS"}, items[1].Tags)
+	assert.False(t, items[1].Favorite)
+
+	// Third item: secure note
+	assert.Equal(t, "My Secret Note", items[2].Name)
+	assert.Equal(t, types.ItemTypeSecureNote, items[2].Type)
+	assert.Equal(t, "This is a secure note", items[2].Notes)
+	assert.Equal(t, "http://sn", items[2].Fields[types.FieldURL])
+}
+
+func TestImportLastPassEmpty(t *testing.T) {
+	items, err := ImportLastPass(strings.NewReader(""))
+	require.NoError(t, err)
+	assert.Nil(t, items)
+}
+
+func TestImportLastPassHeaderOnly(t *testing.T) {
+	items, err := ImportLastPass(strings.NewReader("url,username,password,totp,extra,name,grouping,fav\n"))
+	require.NoError(t, err)
+	assert.Nil(t, items)
+}
+
+func TestImportLastPassSpecialChars(t *testing.T) {
+	csv := "url,username,password,totp,extra,name,grouping,fav\nhttps://example.com,\"user@email.com\",\"p@ss,word!\",,,\"Site \"\"A\"\"\",folder,0\n"
+	items, err := ImportLastPass(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "Site \"A\"", items[0].Name)
+	assert.Equal(t, "user@email.com", items[0].Fields[types.FieldUsername])
+	assert.Equal(t, "p@ss,word!", items[0].Fields[types.FieldPassword])
+}
+
+func TestImportLastPassNoGrouping(t *testing.T) {
+	csv := "url,username,password,totp,extra,name,grouping,fav\nhttps://example.com,user,pass,,,Test,,0\n"
+	items, err := ImportLastPass(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Nil(t, items[0].Tags)
+}
+
+// --- KeePass import tests ---
+
+const keepassCSV = `Group,Title,Username,Password,URL,Notes
+Internet,GitHub,devuser,s3cure!,https://github.com,My GitHub
+Internet/Cloud,AWS Console,admin,Cl0udP@ss,https://aws.amazon.com,
+Email,Gmail,user@gmail.com,gmailP@ss,https://mail.google.com,Personal email
+`
+
+func TestImportKeePass(t *testing.T) {
+	items, err := ImportKeePass(strings.NewReader(keepassCSV))
+	require.NoError(t, err)
+	require.Len(t, items, 3)
+
+	assert.Equal(t, "GitHub", items[0].Name)
+	assert.Equal(t, types.ItemTypeLogin, items[0].Type)
+	assert.Equal(t, "https://github.com", items[0].Fields[types.FieldURL])
+	assert.Equal(t, "devuser", items[0].Fields[types.FieldUsername])
+	assert.Equal(t, "s3cure!", items[0].Fields[types.FieldPassword])
+	assert.Equal(t, "My GitHub", items[0].Notes)
+	assert.Equal(t, []string{"Internet"}, items[0].Tags)
+
+	assert.Equal(t, "AWS Console", items[1].Name)
+	assert.Equal(t, []string{"Internet", "Cloud"}, items[1].Tags)
+	assert.Empty(t, items[1].Notes)
+
+	assert.Equal(t, "Gmail", items[2].Name)
+	assert.Equal(t, "user@gmail.com", items[2].Fields[types.FieldUsername])
+	assert.Equal(t, []string{"Email"}, items[2].Tags)
+}
+
+func TestImportKeePassEmpty(t *testing.T) {
+	items, err := ImportKeePass(strings.NewReader(""))
+	require.NoError(t, err)
+	assert.Nil(t, items)
+}
+
+func TestImportKeePassHeaderOnly(t *testing.T) {
+	items, err := ImportKeePass(strings.NewReader("Group,Title,Username,Password,URL,Notes\n"))
+	require.NoError(t, err)
+	assert.Nil(t, items)
+}
+
+func TestImportKeePassSpecialChars(t *testing.T) {
+	csv := "Group,Title,Username,Password,URL,Notes\n\"Special/Group\",\"Site \"\"X\"\"\",\"user@test.com\",\"p@ss,w0rd\",https://x.com,\"Multi\nline note\"\n"
+	items, err := ImportKeePass(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "Site \"X\"", items[0].Name)
+	assert.Equal(t, "user@test.com", items[0].Fields[types.FieldUsername])
+	assert.Equal(t, "p@ss,w0rd", items[0].Fields[types.FieldPassword])
+	assert.Equal(t, []string{"Special", "Group"}, items[0].Tags)
+}
+
+func TestImportKeePassNameFallbackToURL(t *testing.T) {
+	csv := "Group,Title,Username,Password,URL,Notes\nRoot,,user,pass,https://example.com,\n"
+	items, err := ImportKeePass(strings.NewReader(csv))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "https://example.com", items[0].Name)
+}
+
+// --- 1PUX import tests ---
+
+const onePUXJSON = `{
+	"accounts": [{
+		"vaults": [{
+			"items": [
+				{
+					"item": {
+						"uuid": "uuid-1",
+						"typeName": "001",
+						"title": "GitHub",
+						"overview": {"url": "https://github.com"},
+						"details": {
+							"loginFields": [
+								{"designation": "username", "value": "devuser"},
+								{"designation": "password", "value": "s3cure!"}
+							],
+							"sections": [{
+								"fields": [
+									{"title": "recovery", "value": {"string": "abc-def"}}
+								]
+							}],
+							"notesPlain": "My GitHub account"
+						}
+					}
+				},
+				{
+					"item": {
+						"uuid": "uuid-2",
+						"typeName": "003",
+						"title": "Secret Note",
+						"overview": {},
+						"details": {
+							"notesPlain": "Top secret stuff"
+						}
+					}
+				}
+			]
+		}]
+	}]
+}`
+
+func TestImport1PUX(t *testing.T) {
+	items, err := Import1PUX(strings.NewReader(onePUXJSON))
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+
+	assert.Equal(t, "uuid-1", items[0].ID)
+	assert.Equal(t, "GitHub", items[0].Name)
+	assert.Equal(t, types.ItemTypeLogin, items[0].Type)
+	assert.Equal(t, "https://github.com", items[0].Fields[types.FieldURL])
+	assert.Equal(t, "devuser", items[0].Fields[types.FieldUsername])
+	assert.Equal(t, "s3cure!", items[0].Fields[types.FieldPassword])
+	assert.Equal(t, "My GitHub account", items[0].Notes)
+	assert.Equal(t, "abc-def", items[0].CustomFields["recovery"])
+
+	assert.Equal(t, "uuid-2", items[1].ID)
+	assert.Equal(t, "Secret Note", items[1].Name)
+	assert.Equal(t, types.ItemTypeSecureNote, items[1].Type)
+	assert.Equal(t, "Top secret stuff", items[1].Notes)
+}
+
+func TestImport1PUXEmpty(t *testing.T) {
+	items, err := Import1PUX(strings.NewReader(`{"accounts":[]}`))
+	require.NoError(t, err)
+	assert.Empty(t, items)
+}
+
+func TestImport1PUXInvalidJSON(t *testing.T) {
+	_, err := Import1PUX(strings.NewReader("not json"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse 1PUX JSON")
+}
+
+func TestImport1PUXMultipleVaultsAndAccounts(t *testing.T) {
+	data := `{
+		"accounts": [
+			{
+				"vaults": [
+					{
+						"items": [
+							{"item": {"uuid": "a1v1", "typeName": "001", "title": "Site A", "overview": {}, "details": {}}}
+						]
+					},
+					{
+						"items": [
+							{"item": {"uuid": "a1v2", "typeName": "001", "title": "Site B", "overview": {}, "details": {}}}
+						]
+					}
+				]
+			},
+			{
+				"vaults": [{
+					"items": [
+						{"item": {"uuid": "a2v1", "typeName": "001", "title": "Site C", "overview": {}, "details": {}}}
+					]
+				}]
+			}
+		]
+	}`
+	items, err := Import1PUX(strings.NewReader(data))
+	require.NoError(t, err)
+	require.Len(t, items, 3)
+	assert.Equal(t, "Site A", items[0].Name)
+	assert.Equal(t, "Site B", items[1].Name)
+	assert.Equal(t, "Site C", items[2].Name)
+}
+
+func TestImport1PUXTypeMappings(t *testing.T) {
+	data := `{
+		"accounts": [{
+			"vaults": [{
+				"items": [
+					{"item": {"uuid": "1", "typeName": "001", "title": "Login", "overview": {}, "details": {}}},
+					{"item": {"uuid": "2", "typeName": "002", "title": "Card", "overview": {}, "details": {}}},
+					{"item": {"uuid": "3", "typeName": "003", "title": "Note", "overview": {}, "details": {}}},
+					{"item": {"uuid": "4", "typeName": "004", "title": "Identity", "overview": {}, "details": {}}},
+					{"item": {"uuid": "5", "typeName": "005", "title": "Password", "overview": {}, "details": {}}},
+					{"item": {"uuid": "6", "typeName": "999", "title": "Unknown", "overview": {}, "details": {}}}
+				]
+			}]
+		}]
+	}`
+	items, err := Import1PUX(strings.NewReader(data))
+	require.NoError(t, err)
+	require.Len(t, items, 6)
+	assert.Equal(t, types.ItemTypeLogin, items[0].Type)
+	assert.Equal(t, types.ItemTypeCreditCard, items[1].Type)
+	assert.Equal(t, types.ItemTypeSecureNote, items[2].Type)
+	assert.Equal(t, types.ItemTypeIdentity, items[3].Type)
+	assert.Equal(t, types.ItemTypeLogin, items[4].Type)      // 005 -> Login
+	assert.Equal(t, types.ItemTypeLogin, items[5].Type)      // unknown -> Login
+}
+
+func TestImport1PUXMissingOptionalFields(t *testing.T) {
+	data := `{
+		"accounts": [{
+			"vaults": [{
+				"items": [{
+					"item": {
+						"uuid": "min",
+						"typeName": "001",
+						"title": "Minimal",
+						"overview": {},
+						"details": {}
+					}
+				}]
+			}]
+		}]
+	}`
+	items, err := Import1PUX(strings.NewReader(data))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "Minimal", items[0].Name)
+	assert.Empty(t, items[0].Fields[types.FieldURL])
+	assert.Empty(t, items[0].Fields[types.FieldUsername])
+	assert.Empty(t, items[0].Fields[types.FieldPassword])
+	assert.Empty(t, items[0].Notes)
+	assert.Nil(t, items[0].CustomFields)
+}
+
+func TestImport1PUXEmptyTitleSkipped(t *testing.T) {
+	data := `{
+		"accounts": [{
+			"vaults": [{
+				"items": [
+					{"item": {"uuid": "1", "typeName": "001", "title": "", "overview": {}, "details": {}}},
+					{"item": {"uuid": "2", "typeName": "001", "title": "Valid", "overview": {}, "details": {}}}
+				]
+			}]
+		}]
+	}`
+	items, err := Import1PUX(strings.NewReader(data))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "Valid", items[0].Name)
+}
+
+func TestImport1PUXSectionFieldsIgnoreEmpty(t *testing.T) {
+	data := `{
+		"accounts": [{
+			"vaults": [{
+				"items": [{
+					"item": {
+						"uuid": "1",
+						"typeName": "001",
+						"title": "WithSections",
+						"overview": {},
+						"details": {
+							"sections": [{
+								"fields": [
+									{"title": "filled", "value": {"string": "value1"}},
+									{"title": "", "value": {"string": "no-title"}},
+									{"title": "empty-val", "value": {"string": ""}}
+								]
+							}]
+						}
+					}
+				}]
+			}]
+		}]
+	}`
+	items, err := Import1PUX(strings.NewReader(data))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	require.Len(t, items[0].CustomFields, 1)
+	assert.Equal(t, "value1", items[0].CustomFields["filled"])
+}
+
+func TestMap1PUXType(t *testing.T) {
+	assert.Equal(t, types.ItemTypeLogin, map1PUXType("001"))
+	assert.Equal(t, types.ItemTypeCreditCard, map1PUXType("002"))
+	assert.Equal(t, types.ItemTypeSecureNote, map1PUXType("003"))
+	assert.Equal(t, types.ItemTypeIdentity, map1PUXType("004"))
+	assert.Equal(t, types.ItemTypeLogin, map1PUXType("005"))
+	assert.Equal(t, types.ItemTypeLogin, map1PUXType("unknown"))
+	assert.Equal(t, types.ItemTypeLogin, map1PUXType(""))
+}

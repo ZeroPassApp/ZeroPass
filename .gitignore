@@ -19,3 +19,4 @@ coverage.html
 *.pem
 *.key
 cli
+syncserver

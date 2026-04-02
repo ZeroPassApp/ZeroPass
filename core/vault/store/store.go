@@ -15,6 +15,7 @@ import (
 	"github.com/zeropass/zeropass/core/crypto/encoding"
 	"github.com/zeropass/zeropass/core/crypto/kdf"
 	"github.com/zeropass/zeropass/core/crypto/key"
+	"github.com/zeropass/zeropass/core/vault/index"
 )
 
 // Default paths and settings.
@@ -191,6 +192,10 @@ func (v *Vault) Unlock(masterPassword string) error {
 	v.locked = false
 	v.lastAccess = time.Now()
 	v.startAutoLock()
+
+	// Decrypt index file at rest (best-effort).
+	_ = index.DecryptIndexFile(v.IndexPath(), v.vaultKey)
+
 	return nil
 }
 
@@ -217,6 +222,10 @@ func (v *Vault) UnlockWithRecovery(mnemonic string) error {
 	v.locked = false
 	v.lastAccess = time.Now()
 	v.startAutoLock()
+
+	// Decrypt index file at rest (best-effort).
+	_ = index.DecryptIndexFile(v.IndexPath(), v.vaultKey)
+
 	return nil
 }
 
@@ -228,7 +237,9 @@ func (v *Vault) Lock() {
 }
 
 func (v *Vault) lockInternal() {
+	// Encrypt the index file before zeroing key material.
 	if v.vaultKey != nil {
+		_ = index.EncryptIndexFile(v.IndexPath(), v.vaultKey)
 		crypto.ZeroBytes(v.vaultKey)
 		v.vaultKey = nil
 	}
@@ -248,8 +259,8 @@ func (v *Vault) IsLocked() bool {
 
 // VaultKey returns the current vault key. Caller must not retain.
 func (v *Vault) VaultKey() ([]byte, error) {
-	v.mu.RLock()
-	defer v.mu.RUnlock()
+	v.mu.Lock()
+	defer v.mu.Unlock()
 	if v.locked || v.vaultKey == nil {
 		return nil, errors.New("vault is locked")
 	}
@@ -327,4 +338,28 @@ func readMetadata(vaultPath string) (*VaultMetadata, error) {
 		return nil, fmt.Errorf("unmarshal metadata: %w", err)
 	}
 	return &meta, nil
+}
+
+// RegenerateRecovery generates a new recovery mnemonic and re-encrypts the vault key
+// with the new recovery key. Returns the new mnemonic. The vault must be unlocked.
+func (v *Vault) RegenerateRecovery() (string, error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if v.locked {
+		return "", errors.New("vault is locked")
+	}
+
+	mnemonic, encRK, err := key.RegenerateRecoveryKey(v.vaultKey)
+	if err != nil {
+		return "", fmt.Errorf("regenerate recovery key: %w", err)
+	}
+
+	v.meta.EncryptedRecoveryKey = encoding.Base64StdEncode(encRK.Ciphertext)
+
+	if err := writeMetadata(v.path, v.meta); err != nil {
+		return "", fmt.Errorf("persist metadata: %w", err)
+	}
+
+	return mnemonic, nil
 }

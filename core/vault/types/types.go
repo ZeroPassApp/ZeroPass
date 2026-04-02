@@ -13,6 +13,7 @@ const (
 	ItemTypeSecureNote ItemType = "note"
 	ItemTypeCreditCard ItemType = "creditcard"
 	ItemTypeIdentity   ItemType = "identity"
+	ItemTypePasskey    ItemType = "passkey"
 	ItemTypeCustom     ItemType = "custom"
 )
 
@@ -24,6 +25,7 @@ var ValidItemTypes = map[ItemType]bool{
 	ItemTypeSecureNote: true,
 	ItemTypeCreditCard: true,
 	ItemTypeIdentity:   true,
+	ItemTypePasskey:    true,
 	ItemTypeCustom:     true,
 }
 
@@ -67,19 +69,29 @@ const (
 	FieldAddress   = "address"
 )
 
+// Passkey field name constants.
+const (
+	FieldCredentialID    = "credential_id"
+	FieldPasskeyPublicKey = "passkey_public_key"
+	FieldRelyingPartyID  = "rp_id"
+	FieldUserHandle      = "user_handle"
+	FieldSignCount       = "sign_count"
+)
+
 // Item represents a single vault entry.
 type Item struct {
-	ID           string            `json:"id"`
-	Type         ItemType          `json:"type"`
-	Name         string            `json:"name"`
-	Fields       map[string]string `json:"fields"`
-	Notes        string            `json:"notes"`
-	Tags         []string          `json:"tags"`
-	Favorite     bool              `json:"favorite"`
-	CustomFields map[string]string `json:"custom_fields"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
-	Version      int               `json:"version"`
+	ID             string            `json:"id"`
+	Type           ItemType          `json:"type"`
+	Name           string            `json:"name"`
+	Fields         map[string]string `json:"fields"`
+	Notes          string            `json:"notes"`
+	Tags           []string          `json:"tags"`
+	Favorite       bool              `json:"favorite"`
+	CustomFields   map[string]string `json:"custom_fields"`
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
+	LastAccessedAt time.Time         `json:"last_accessed_at"`
+	Version        int               `json:"version"`
 }
 
 // EncryptedItem is the on-disk format for an encrypted vault item.
@@ -102,10 +114,11 @@ type ItemFilter struct {
 
 // SortBy constants.
 const (
-	SortByName      = "name"
-	SortByCreatedAt = "created_at"
-	SortByUpdatedAt = "updated_at"
-	SortByType      = "type"
+	SortByName         = "name"
+	SortByCreatedAt    = "created_at"
+	SortByUpdatedAt    = "updated_at"
+	SortByType         = "type"
+	SortByLastAccessed = "last_accessed_at"
 )
 
 // SortOrder constants.

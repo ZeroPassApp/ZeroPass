@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zeropass/zeropass/core/vault/index"
 )
 
 func testVaultDir(t *testing.T) string {
@@ -478,4 +479,155 @@ func TestCreateWriteMetadataFailure(t *testing.T) {
 		assert.Error(t, err)
 	}
 	// On macOS root or some systems, chmod may not prevent writes, so this might succeed
+}
+
+// --- Feature 5: RegenerateRecovery tests ---
+
+func TestRegenerateRecovery(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	oldMnemonic := result.Mnemonic
+	oldEncRK := v.meta.EncryptedRecoveryKey
+
+	// Save vault key for comparison
+	vk, err := v.VaultKey()
+	require.NoError(t, err)
+	vkCopy := make([]byte, len(vk))
+	copy(vkCopy, vk)
+
+	// Regenerate
+	newMnemonic, err := v.RegenerateRecovery()
+	require.NoError(t, err)
+	assert.NotEmpty(t, newMnemonic)
+	assert.NotEqual(t, oldMnemonic, newMnemonic)
+	assert.NotEqual(t, oldEncRK, v.meta.EncryptedRecoveryKey)
+
+	// Lock and unlock with the new mnemonic
+	v.Lock()
+	err = v.UnlockWithRecovery(newMnemonic)
+	require.NoError(t, err)
+	vk2, err := v.VaultKey()
+	require.NoError(t, err)
+	assert.Equal(t, vkCopy, vk2)
+
+	// Old mnemonic should no longer work
+	v.Lock()
+	err = v.UnlockWithRecovery(oldMnemonic)
+	assert.Error(t, err)
+}
+
+func TestRegenerateRecoveryWhenLocked(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	_, err = v.RegenerateRecovery()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "vault is locked")
+}
+
+func TestRegenerateRecoveryPersistsMetadata(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	newMnemonic, err := v.RegenerateRecovery()
+	require.NoError(t, err)
+	v.Lock()
+
+	// Reopen from disk
+	v2, err := Open(dir)
+	require.NoError(t, err)
+
+	err = v2.UnlockWithRecovery(newMnemonic)
+	require.NoError(t, err)
+	assert.False(t, v2.IsLocked())
+	v2.Lock()
+}
+
+// --- Feature 3: Encrypted index integration in store tests ---
+
+func TestLockEncryptsIndexUnlockDecrypts(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	indexPath := v.IndexPath()
+
+	// Create an index file to simulate usage
+	idx, err := index.Open(indexPath)
+	require.NoError(t, err)
+	require.NoError(t, idx.Close())
+
+	// Verify plaintext index exists
+	_, err = os.Stat(indexPath)
+	require.NoError(t, err)
+
+	// Lock should encrypt the index
+	v.Lock()
+	assert.True(t, index.IsEncrypted(indexPath), "index should be encrypted after lock")
+	_, err = os.Stat(indexPath)
+	assert.True(t, os.IsNotExist(err), "plaintext index should be removed after lock")
+
+	// Unlock should decrypt the index
+	err = v.Unlock("pass")
+	require.NoError(t, err)
+	assert.False(t, index.IsEncrypted(indexPath), "index should not be encrypted after unlock")
+	_, err = os.Stat(indexPath)
+	assert.NoError(t, err, "plaintext index should be restored after unlock")
+
+	v.Lock()
+}
+
+func TestLockNoIndexFileNoPanic(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	// Lock without any index file — should not panic or error
+	v.Lock()
+	assert.True(t, v.IsLocked())
+}
+
+func TestUnlockWithRecoveryDecryptsIndex(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	indexPath := v.IndexPath()
+
+	// Create index file
+	idx, err := index.Open(indexPath)
+	require.NoError(t, err)
+	require.NoError(t, idx.Close())
+
+	// Lock encrypts
+	v.Lock()
+	assert.True(t, index.IsEncrypted(indexPath))
+
+	// Unlock with recovery decrypts
+	err = v.UnlockWithRecovery(result.Mnemonic)
+	require.NoError(t, err)
+	assert.False(t, index.IsEncrypted(indexPath))
+	v.Lock()
 }

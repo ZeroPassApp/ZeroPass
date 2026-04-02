@@ -59,6 +59,12 @@ func (m *Manager) AddItem(item *types.Item) error {
 	if item == nil {
 		return errors.New("item must not be nil")
 	}
+
+	// Auto-detect item type if empty.
+	if item.Type == "" {
+		item.Type = AutoCategorize(item.Fields)
+	}
+
 	if err := validateItem(item); err != nil {
 		return fmt.Errorf("validate: %w", err)
 	}
@@ -84,11 +90,21 @@ func (m *Manager) AddItem(item *types.Item) error {
 }
 
 // GetItem reads and decrypts an item from disk.
+// It also updates the LastAccessedAt timestamp (best-effort, does not fail on save error).
 func (m *Manager) GetItem(id string) (*types.Item, error) {
 	if id == "" {
 		return nil, errors.New("item ID must not be empty")
 	}
-	return m.readAndDecrypt(id)
+	item, err := m.readAndDecrypt(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update last accessed timestamp (best-effort).
+	item.LastAccessedAt = time.Now().UTC()
+	_ = m.encryptAndSave(item) // save without incrementing version; ignore errors
+
+	return item, nil
 }
 
 // UpdateItem increments the version, re-encrypts, and saves.
@@ -359,6 +375,8 @@ func sortItems(items []*types.Item, sortBy, sortOrder string) {
 			less = items[i].UpdatedAt.Before(items[j].UpdatedAt)
 		case types.SortByType:
 			less = items[i].Type < items[j].Type
+		case types.SortByLastAccessed:
+			less = items[i].LastAccessedAt.Before(items[j].LastAccessedAt)
 		default: // name
 			less = strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name)
 		}
@@ -367,4 +385,29 @@ func sortItems(items []*types.Item, sortBy, sortOrder string) {
 		}
 		return less
 	})
+}
+
+// AutoCategorize infers an ItemType from the provided fields map.
+func AutoCategorize(fields map[string]string) types.ItemType {
+	has := func(key string) bool {
+		_, ok := fields[key]
+		return ok
+	}
+
+	switch {
+	case has(types.FieldURL) && has(types.FieldUsername) && has(types.FieldPassword):
+		return types.ItemTypeLogin
+	case has(types.FieldAPIKey) || has(types.FieldAPISecret):
+		return types.ItemTypeAPIKey
+	case has(types.FieldPrivateKey) || has(types.FieldPublicKey):
+		return types.ItemTypeSSHKey
+	case has(types.FieldCardNumber):
+		return types.ItemTypeCreditCard
+	case has(types.FieldFirstName) && has(types.FieldLastName):
+		return types.ItemTypeIdentity
+	case has(types.FieldCredentialID) && has(types.FieldRelyingPartyID):
+		return types.ItemTypePasskey
+	default:
+		return types.ItemTypeCustom
+	}
 }

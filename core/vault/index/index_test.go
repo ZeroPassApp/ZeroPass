@@ -304,9 +304,9 @@ func TestCloseNilDB(t *testing.T) {
 }
 
 func TestSanitizeQuerySpecialCharsOnly(t *testing.T) {
-	// When all chars are special and cleaned becomes empty, returns original q
+	// When all chars are special and cleaned becomes empty, returns empty string (safe)
 	result := sanitizeQuery("\"'*()")
-	assert.Equal(t, "\"'*()", result)
+	assert.Equal(t, "", result)
 }
 
 func TestSanitizeQueryMixed(t *testing.T) {
@@ -858,4 +858,137 @@ func TestRebuildIndexWithAddError(t *testing.T) {
 	err = idx.RebuildIndex([]*types.Item{nil})
 	assert.Error(t, err) // AddToIndex should reject nil item
 	idx.Close()
+}
+
+// --- Feature 3: Encrypted Index tests ---
+
+func testKey() []byte {
+	// 32-byte key for AES-256-GCM.
+	return []byte("01234567890123456789012345678901")
+}
+
+func TestEncryptAndDecryptIndexFile(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+
+	// Create a real index, add data, close it.
+	idx, err := Open(dbPath)
+	require.NoError(t, err)
+	require.NoError(t, idx.AddToIndex(&types.Item{
+		ID: "enc-1", Type: types.ItemTypeLogin, Name: "Encrypted",
+	}))
+	require.NoError(t, idx.Close())
+
+	key := testKey()
+
+	// Encrypt
+	require.NoError(t, EncryptIndexFile(dbPath, key))
+	assert.True(t, IsEncrypted(dbPath))
+	// Plaintext should be gone
+	_, err = os.Stat(dbPath)
+	assert.True(t, os.IsNotExist(err))
+
+	// Decrypt
+	require.NoError(t, DecryptIndexFile(dbPath, key))
+	assert.False(t, IsEncrypted(dbPath))
+	// Plaintext restored
+	_, err = os.Stat(dbPath)
+	require.NoError(t, err)
+
+	// Reopen and verify data intact
+	idx2, err := Open(dbPath)
+	require.NoError(t, err)
+	defer idx2.Close()
+
+	ids, err := idx2.Search("Encrypted")
+	require.NoError(t, err)
+	assert.Len(t, ids, 1)
+	assert.Equal(t, "enc-1", ids[0])
+}
+
+func TestEncryptIndexFileNonExistent(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "nonexistent.db")
+	// Should be a no-op (no error) when file doesn't exist.
+	err := EncryptIndexFile(dbPath, testKey())
+	assert.NoError(t, err)
+}
+
+func TestDecryptIndexFileNonExistent(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "nonexistent.db")
+	// Should be a no-op when .enc doesn't exist.
+	err := DecryptIndexFile(dbPath, testKey())
+	assert.NoError(t, err)
+}
+
+func TestDecryptIndexFileWrongKey(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+
+	require.NoError(t, os.WriteFile(dbPath, []byte("test data"), 0600))
+
+	key := testKey()
+	require.NoError(t, EncryptIndexFile(dbPath, key))
+
+	wrongKey := []byte("99999999999999999999999999999999")
+	err := DecryptIndexFile(dbPath, wrongKey)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "decrypt index file")
+}
+
+func TestIsEncrypted(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+
+	assert.False(t, IsEncrypted(dbPath))
+
+	require.NoError(t, os.WriteFile(dbPath+".enc", []byte("data"), 0600))
+	assert.True(t, IsEncrypted(dbPath))
+}
+
+func TestEncryptIndexFileRemovesWALAndSHM(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+
+	// Create main file + WAL + SHM sidecar files
+	require.NoError(t, os.WriteFile(dbPath, []byte("db"), 0600))
+	require.NoError(t, os.WriteFile(dbPath+"-wal", []byte("wal"), 0600))
+	require.NoError(t, os.WriteFile(dbPath+"-shm", []byte("shm"), 0600))
+
+	require.NoError(t, EncryptIndexFile(dbPath, testKey()))
+
+	_, err := os.Stat(dbPath)
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(dbPath + "-wal")
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(dbPath + "-shm")
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(dbPath + ".enc")
+	assert.NoError(t, err)
+}
+
+func TestEncryptDecryptRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+	original := []byte("some sqlite content here")
+	require.NoError(t, os.WriteFile(dbPath, original, 0600))
+
+	key := testKey()
+	require.NoError(t, EncryptIndexFile(dbPath, key))
+	require.NoError(t, DecryptIndexFile(dbPath, key))
+
+	restored, err := os.ReadFile(dbPath)
+	require.NoError(t, err)
+	assert.Equal(t, original, restored)
+}
+
+func TestEncryptIndexFileInvalidKey(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "index.db")
+	require.NoError(t, os.WriteFile(dbPath, []byte("data"), 0600))
+
+	// Key must be 32 bytes for AES-256
+	err := EncryptIndexFile(dbPath, []byte("short"))
+	assert.Error(t, err)
 }

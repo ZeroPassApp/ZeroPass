@@ -929,7 +929,7 @@ func TestIntegration_CORSPreflightOnAllEndpoints(t *testing.T) {
 }
 
 func TestRun_InvalidDBPath(t *testing.T) {
-err := run(0, "/nonexistent/dir/cannot/create/db.sqlite", "")
+err := run(serverConfig{DBPath: "/nonexistent/dir/cannot/create/db.sqlite"})
 assert.Error(t, err)
 assert.Contains(t, err.Error(), "initialize storage")
 }
@@ -938,7 +938,7 @@ func TestRun_GracefulShutdown(t *testing.T) {
 dbPath := filepath.Join(t.TempDir(), "run-test.db")
 errCh := make(chan error, 1)
 go func() {
-errCh <- run(0, dbPath, "test-key")
+errCh <- run(serverConfig{DBPath: dbPath, APIKey: "test-key"})
 }()
 
 // Give server time to start, then trigger shutdown

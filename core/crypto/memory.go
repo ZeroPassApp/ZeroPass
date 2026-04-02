@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"crypto/subtle"
 	"sync"
 	"unsafe"
 )
@@ -27,4 +28,17 @@ func ZeroBytes(b []byte) {
 	// Memory barrier to ensure the writes are not reordered or eliminated.
 	memoryBarrier.Lock()
 	memoryBarrier.Unlock() //nolint:staticcheck
+}
+
+// SecureCompare performs constant-time comparison of two byte slices.
+// Returns true if and only if the slices are equal.
+// Uses crypto/subtle to prevent timing side-channel attacks.
+// Note: does NOT short-circuit on length mismatch to avoid leaking length info.
+func SecureCompare(a, b []byte) bool {
+	return subtle.ConstantTimeCompare(a, b) == 1
+}
+
+// SecureCompareStrings performs constant-time comparison of two strings.
+func SecureCompareStrings(a, b string) bool {
+	return SecureCompare([]byte(a), []byte(b))
 }

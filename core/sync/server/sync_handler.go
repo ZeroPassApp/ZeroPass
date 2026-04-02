@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/zeropass/zeropass/core/crypto"
 	"github.com/zeropass/zeropass/core/sync/protocol"
 )
 
@@ -182,7 +183,7 @@ func (h *Handler) withAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		auth := r.Header.Get("Authorization")
-		if auth != "Bearer "+h.apiKey {
+		if !crypto.SecureCompareStrings(auth, "Bearer "+h.apiKey) {
 			h.writeError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}

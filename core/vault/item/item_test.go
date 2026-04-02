@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,8 +69,9 @@ func TestAddItemValidation(t *testing.T) {
 	err = m.AddItem(&types.Item{Type: types.ItemTypeLogin})
 	assert.Error(t, err) // no name
 
+	// Empty type is now auto-categorized to "custom", so this should succeed.
 	err = m.AddItem(&types.Item{Name: "x"})
-	assert.Error(t, err) // no type
+	assert.NoError(t, err)
 
 	err = m.AddItem(&types.Item{Name: "x", Type: "bogus"})
 	assert.Error(t, err) // invalid type
@@ -789,4 +791,210 @@ func TestUpdateItemInvalidType(t *testing.T) {
 	err := m.UpdateItem(item.ID, item)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid item type")
+}
+
+// --- Feature 1: Recently Used Tracking tests ---
+
+func TestGetItemSetsLastAccessedAt(t *testing.T) {
+	m := testManager(t)
+	item := sampleLogin()
+	require.NoError(t, m.AddItem(item))
+
+	before := time.Now().UTC()
+	got, err := m.GetItem(item.ID)
+	require.NoError(t, err)
+	after := time.Now().UTC()
+
+	assert.False(t, got.LastAccessedAt.IsZero(), "LastAccessedAt should be set")
+	assert.True(t, !got.LastAccessedAt.Before(before), "LastAccessedAt should be >= before")
+	assert.True(t, !got.LastAccessedAt.After(after), "LastAccessedAt should be <= after")
+}
+
+func TestGetItemLastAccessedAtPersists(t *testing.T) {
+	m := testManager(t)
+	item := sampleLogin()
+	require.NoError(t, m.AddItem(item))
+
+	_, err := m.GetItem(item.ID)
+	require.NoError(t, err)
+
+	// Read again — should have the last accessed timestamp persisted
+	got2, err := m.GetItem(item.ID)
+	require.NoError(t, err)
+	assert.False(t, got2.LastAccessedAt.IsZero())
+}
+
+func TestGetItemDoesNotIncrementVersion(t *testing.T) {
+	m := testManager(t)
+	item := sampleLogin()
+	require.NoError(t, m.AddItem(item))
+	assert.Equal(t, 1, item.Version)
+
+	got, err := m.GetItem(item.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, got.Version, "version should not change on access")
+}
+
+func TestSortByLastAccessed(t *testing.T) {
+	m := testManager(t)
+
+	// Add items and access them in a known order
+	names := []string{"First", "Second", "Third"}
+	ids := make([]string, 3)
+	for i, name := range names {
+		item := &types.Item{
+			Type:   types.ItemTypeLogin,
+			Name:   name,
+			Fields: map[string]string{types.FieldPassword: "p"},
+		}
+		require.NoError(t, m.AddItem(item))
+		ids[i] = item.ID
+	}
+
+	// Access in reverse order: Third, Second, First
+	for i := len(ids) - 1; i >= 0; i-- {
+		_, err := m.GetItem(ids[i])
+		require.NoError(t, err)
+		time.Sleep(10 * time.Millisecond) // ensure distinct timestamps
+	}
+
+	// Sort ascending by last accessed: Third (earliest access), Second, First (latest access)
+	items, err := m.ListItems(types.ItemFilter{
+		SortBy:    types.SortByLastAccessed,
+		SortOrder: types.SortAsc,
+	})
+	require.NoError(t, err)
+	require.Len(t, items, 3)
+	assert.Equal(t, "Third", items[0].Name)
+	assert.Equal(t, "First", items[2].Name)
+}
+
+func TestSortByLastAccessedDesc(t *testing.T) {
+	m := testManager(t)
+
+	for _, name := range []string{"A", "B"} {
+		item := &types.Item{
+			Type:   types.ItemTypeLogin,
+			Name:   name,
+			Fields: map[string]string{types.FieldPassword: "p"},
+		}
+		require.NoError(t, m.AddItem(item))
+	}
+
+	items, err := m.ListItems(types.ItemFilter{
+		SortBy:    types.SortByLastAccessed,
+		SortOrder: types.SortDesc,
+	})
+	require.NoError(t, err)
+	assert.Len(t, items, 2)
+}
+
+// --- Feature 2: Passkey ItemType tests ---
+
+func TestAddPasskeyItem(t *testing.T) {
+	m := testManager(t)
+	item := &types.Item{
+		Type: types.ItemTypePasskey,
+		Name: "My WebAuthn Key",
+		Fields: map[string]string{
+			types.FieldCredentialID:    "cred-abc123",
+			types.FieldPasskeyPublicKey: "pk-xyz",
+			types.FieldRelyingPartyID:  "example.com",
+			types.FieldUserHandle:      "user-handle-1",
+			types.FieldSignCount:       "5",
+		},
+	}
+	require.NoError(t, m.AddItem(item))
+	assert.NotEmpty(t, item.ID)
+
+	got, err := m.GetItem(item.ID)
+	require.NoError(t, err)
+	assert.Equal(t, types.ItemTypePasskey, got.Type)
+	assert.Equal(t, "cred-abc123", got.Fields[types.FieldCredentialID])
+	assert.Equal(t, "example.com", got.Fields[types.FieldRelyingPartyID])
+}
+
+func TestPasskeyTypeIsValid(t *testing.T) {
+	assert.True(t, types.ValidItemTypes[types.ItemTypePasskey])
+}
+
+// --- Feature 4: Auto-Categorization tests ---
+
+func TestAutoCategorizeLogin(t *testing.T) {
+	fields := map[string]string{
+		types.FieldURL:      "https://example.com",
+		types.FieldUsername: "user",
+		types.FieldPassword: "pass",
+	}
+	assert.Equal(t, types.ItemTypeLogin, AutoCategorize(fields))
+}
+
+func TestAutoCategorizeAPIKey(t *testing.T) {
+	assert.Equal(t, types.ItemTypeAPIKey, AutoCategorize(map[string]string{
+		types.FieldAPIKey: "key-123",
+	}))
+	assert.Equal(t, types.ItemTypeAPIKey, AutoCategorize(map[string]string{
+		types.FieldAPISecret: "secret-456",
+	}))
+}
+
+func TestAutoCategorizeSSHKey(t *testing.T) {
+	assert.Equal(t, types.ItemTypeSSHKey, AutoCategorize(map[string]string{
+		types.FieldPrivateKey: "-----BEGIN RSA PRIVATE KEY-----",
+	}))
+	assert.Equal(t, types.ItemTypeSSHKey, AutoCategorize(map[string]string{
+		types.FieldPublicKey: "ssh-rsa AAAA...",
+	}))
+}
+
+func TestAutoCategorizeCredCard(t *testing.T) {
+	assert.Equal(t, types.ItemTypeCreditCard, AutoCategorize(map[string]string{
+		types.FieldCardNumber: "4111111111111111",
+	}))
+}
+
+func TestAutoCategorizeIdentity(t *testing.T) {
+	assert.Equal(t, types.ItemTypeIdentity, AutoCategorize(map[string]string{
+		types.FieldFirstName: "John",
+		types.FieldLastName:  "Doe",
+	}))
+}
+
+func TestAutoCategorizePasskey(t *testing.T) {
+	assert.Equal(t, types.ItemTypePasskey, AutoCategorize(map[string]string{
+		types.FieldCredentialID:   "cred-123",
+		types.FieldRelyingPartyID: "example.com",
+	}))
+}
+
+func TestAutoCategorizeCustom(t *testing.T) {
+	assert.Equal(t, types.ItemTypeCustom, AutoCategorize(map[string]string{
+		"some_random_field": "value",
+	}))
+	assert.Equal(t, types.ItemTypeCustom, AutoCategorize(nil))
+	assert.Equal(t, types.ItemTypeCustom, AutoCategorize(map[string]string{}))
+}
+
+func TestAddItemAutoCategorizesWhenTypeEmpty(t *testing.T) {
+	m := testManager(t)
+	item := &types.Item{
+		Name: "Auto Login",
+		Fields: map[string]string{
+			types.FieldURL:      "https://github.com",
+			types.FieldUsername: "user",
+			types.FieldPassword: "pass",
+		},
+	}
+	require.NoError(t, m.AddItem(item))
+	assert.Equal(t, types.ItemTypeLogin, item.Type)
+}
+
+func TestAddItemPreservesExplicitType(t *testing.T) {
+	m := testManager(t)
+	item := &types.Item{
+		Name: "My Note",
+		Type: types.ItemTypeSecureNote,
+	}
+	require.NoError(t, m.AddItem(item))
+	assert.Equal(t, types.ItemTypeSecureNote, item.Type)
 }

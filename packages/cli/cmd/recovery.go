@@ -16,15 +16,45 @@ var recoveryCmd = &cobra.Command{
 }
 
 var (
-	recoveryValidate string
+	recoveryValidate   string
+	recoveryRegenerate bool
 )
 
 func init() {
 	recoveryCmd.Flags().StringVar(&recoveryValidate, "validate", "", "validate a mnemonic phrase")
+	recoveryCmd.Flags().BoolVar(&recoveryRegenerate, "regenerate", false, "generate new recovery phrase (requires vault unlock)")
 	rootCmd.AddCommand(recoveryCmd)
 }
 
 func runRecovery(cmd *cobra.Command, args []string) error {
+	if recoveryRegenerate {
+		v, err := openAndUnlockVault()
+		if err != nil {
+			return err
+		}
+		defer v.Lock()
+
+		mnemonic, err := v.RegenerateRecovery()
+		if err != nil {
+			return fmt.Errorf("regenerate recovery: %w", err)
+		}
+
+		if flagOutput == "json" {
+			formatOutput(map[string]string{
+				"status":   "regenerated",
+				"mnemonic": mnemonic,
+			})
+		} else {
+			fmt.Fprintln(cmd.ErrOrStderr(), "WARNING: Your previous recovery phrase is now INVALID.")
+			fmt.Fprintln(cmd.ErrOrStderr(), "")
+			fmt.Fprintln(cmd.ErrOrStderr(), "New recovery phrase:")
+			fmt.Fprintln(cmd.ErrOrStderr(), "  "+mnemonic)
+			fmt.Fprintln(cmd.ErrOrStderr(), "")
+			fmt.Fprintln(cmd.ErrOrStderr(), "Store this phrase safely. You will need it if you forget your master password.")
+		}
+		return nil
+	}
+
 	if recoveryValidate != "" {
 		mgr := key.NewRecoveryKeyManager()
 		valid := mgr.ValidateMnemonic(recoveryValidate)

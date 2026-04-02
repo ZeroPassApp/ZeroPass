@@ -12,6 +12,7 @@ import (
 
 	"github.com/zeropass/zeropass/core/vault/index"
 	"github.com/zeropass/zeropass/core/vault/item"
+	"github.com/zeropass/zeropass/core/vault/types"
 )
 
 var runCmd = &cobra.Command{
@@ -28,10 +29,12 @@ Format for references: zp://item-name/field-name`,
 
 var (
 	runEnvFile string
+	runEnvName string
 )
 
 func init() {
 	runCmd.Flags().StringVar(&runEnvFile, "env-file", ".env", "path to .env file with zp:// references")
+	runCmd.Flags().StringVar(&runEnvName, "env", "", "environment name to inject secrets from (uses env:<name> tags)")
 	rootCmd.AddCommand(runCmd)
 }
 
@@ -46,28 +49,50 @@ func runRun(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parse env file: %w", err)
 	}
 
-	// Only open vault if there are zp:// references
-	if hasRefs {
+	needVault := hasRefs || runEnvName != ""
+
+	if needVault {
 		v, err := openAndUnlockVault()
 		if err != nil {
 			return err
 		}
-		defer v.Lock()
 
 		mgr, idx, err := newItemManager(v)
 		if err != nil {
 			return err
 		}
-		defer idx.Close()
 
 		// Resolve all zp:// references
-		for key, val := range envVars {
-			resolved, err := resolveZPReference(val, mgr, idx)
-			if err != nil {
-				return fmt.Errorf("resolve %s: %w", key, err)
+		if hasRefs {
+			for key, val := range envVars {
+				resolved, err := resolveZPReference(val, mgr, idx)
+				if err != nil {
+					return fmt.Errorf("resolve %s: %w", key, err)
+				}
+				envVars[key] = resolved
 			}
-			envVars[key] = resolved
 		}
+
+		// If --env flag is set, inject secrets from tagged items
+		if runEnvName != "" {
+			envTag := "env:" + runEnvName
+			items, err := mgr.ListItems(types.ItemFilter{Tags: []string{envTag}})
+			if err != nil {
+				return fmt.Errorf("list env items: %w", err)
+			}
+
+			for _, itm := range items {
+				prefix := strings.ToUpper(strings.NewReplacer("-", "_", " ", "_", ".", "_").Replace(itm.Name))
+				for fieldName, fieldValue := range itm.Fields {
+					envKey := prefix + "_" + strings.ToUpper(fieldName)
+					envVars[envKey] = fieldValue
+				}
+			}
+		}
+
+		// Cleanup before syscall.Exec replaces the process (defers won't run).
+		idx.Close()
+		v.Lock()
 	}
 
 	// Build environment: inherit current env + add resolved vars

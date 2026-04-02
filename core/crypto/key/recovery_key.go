@@ -78,6 +78,28 @@ func EncryptVaultKeyWithRecovery(vaultKey []byte, mnemonic string) (*EncryptedVa
 	return EncryptVaultKey(vaultKey, recoveryKey)
 }
 
+// RegenerateRecoveryKey generates a new BIP-39 mnemonic and re-encrypts the vault key with it.
+// Returns the new mnemonic and the new encrypted vault key.
+// The caller is responsible for persisting the new encrypted recovery key to vault metadata.
+func RegenerateRecoveryKey(vaultKey []byte) (string, *EncryptedVaultKey, error) {
+	if len(vaultKey) == 0 {
+		return "", nil, errors.New("vault key must not be empty")
+	}
+
+	mgr := NewRecoveryKeyManager()
+	mnemonic, err := mgr.GenerateMnemonic()
+	if err != nil {
+		return "", nil, fmt.Errorf("generate new mnemonic: %w", err)
+	}
+
+	encVK, err := EncryptVaultKeyWithRecovery(vaultKey, mnemonic)
+	if err != nil {
+		return "", nil, fmt.Errorf("encrypt vault key with new recovery: %w", err)
+	}
+
+	return mnemonic, encVK, nil
+}
+
 // DecryptVaultKeyWithRecovery decrypts a vault key using a mnemonic recovery phrase.
 func DecryptVaultKeyWithRecovery(encrypted *EncryptedVaultKey, mnemonic string) ([]byte, error) {
 	mgr := NewRecoveryKeyManager()

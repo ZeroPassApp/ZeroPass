@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver
 
+	"github.com/zeropass/zeropass/core/crypto/cipher"
 	"github.com/zeropass/zeropass/core/vault/types"
 )
 
@@ -117,6 +119,9 @@ func (idx *Index) Search(query string) ([]string, error) {
 	}
 
 	sanitized := sanitizeQuery(query)
+	if sanitized == "" {
+		return nil, nil
+	}
 
 	rows, err := idx.db.Query(
 		`SELECT m.item_id FROM items_fts f JOIN items_map m ON f.rowid = m.fts_rowid WHERE items_fts MATCH ? ORDER BY rank`,
@@ -222,7 +227,7 @@ func sanitizeQuery(q string) string {
 	)
 	cleaned := strings.TrimSpace(replacer.Replace(q))
 	if cleaned == "" {
-		return q
+		return ""
 	}
 
 	// Split into terms and add prefix matching.
@@ -231,4 +236,91 @@ func sanitizeQuery(q string) string {
 		terms[i] = t + "*"
 	}
 	return strings.Join(terms, " ")
+}
+
+// --- index file encryption ---
+
+// IsEncrypted reports whether an encrypted version of the index exists at dbPath+".enc".
+func IsEncrypted(dbPath string) bool {
+	_, err := os.Stat(dbPath + ".enc")
+	return err == nil
+}
+
+// EncryptIndexFile encrypts the SQLite index file at dbPath using AES-256-GCM,
+// writing the result to dbPath+".enc", then removes the plaintext file.
+// It first checkpoints any WAL data to ensure the DB file is complete.
+// Uses atomic write (temp + rename) to prevent data loss on crash.
+func EncryptIndexFile(dbPath string, key []byte) error {
+	// Checkpoint WAL to ensure all data is in the main DB file.
+	// This is best-effort: if the file isn't a valid SQLite DB (e.g. tests),
+	// we skip checkpointing and proceed with raw file encryption.
+	if db, err := sql.Open("sqlite", dbPath); err == nil {
+		if _, cpErr := db.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); cpErr != nil {
+			db.Close()
+			// Only fail if the file exists and is a real DB that couldn't checkpoint.
+			// "not a database" means raw file content — skip checkpoint gracefully.
+			if !strings.Contains(cpErr.Error(), "not a database") {
+				return fmt.Errorf("WAL checkpoint: %w", cpErr)
+			}
+		} else {
+			db.Close()
+		}
+	}
+
+	plaintext, err := os.ReadFile(dbPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // nothing to encrypt
+		}
+		return fmt.Errorf("read index file: %w", err)
+	}
+
+	c := cipher.New()
+	ciphertext, err := c.Encrypt(plaintext, key)
+	if err != nil {
+		return fmt.Errorf("encrypt index file: %w", err)
+	}
+
+	// Atomic write: temp file then rename to prevent partial writes.
+	encPath := dbPath + ".enc"
+	tmpPath := encPath + ".tmp"
+	if err := os.WriteFile(tmpPath, ciphertext, 0600); err != nil {
+		return fmt.Errorf("write encrypted index: %w", err)
+	}
+	if err := os.Rename(tmpPath, encPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("finalize encrypted index: %w", err)
+	}
+
+	// Remove the plaintext file and WAL/SHM sidecar files.
+	os.Remove(dbPath)
+	os.Remove(dbPath + "-wal")
+	os.Remove(dbPath + "-shm")
+	return nil
+}
+
+// DecryptIndexFile decrypts dbPath+".enc" to dbPath using AES-256-GCM,
+// then removes the encrypted file.
+func DecryptIndexFile(dbPath string, key []byte) error {
+	encPath := dbPath + ".enc"
+	ciphertext, err := os.ReadFile(encPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // nothing to decrypt
+		}
+		return fmt.Errorf("read encrypted index: %w", err)
+	}
+
+	c := cipher.New()
+	plaintext, err := c.Decrypt(ciphertext, key)
+	if err != nil {
+		return fmt.Errorf("decrypt index file: %w", err)
+	}
+
+	if err := os.WriteFile(dbPath, plaintext, 0600); err != nil {
+		return fmt.Errorf("write decrypted index: %w", err)
+	}
+
+	os.Remove(encPath)
+	return nil
 }
