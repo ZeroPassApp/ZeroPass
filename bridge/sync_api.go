@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	zpencoding "github.com/zeropass/zeropass/core/crypto/encoding"
 	"github.com/zeropass/zeropass/core/sync/client"
 	"github.com/zeropass/zeropass/core/sync/protocol"
 	"github.com/zeropass/zeropass/core/vault/types"
@@ -33,7 +34,7 @@ func persistSyncConfig(vaultPath string, cfg *syncConfig) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(syncConfigPath(vaultPath), b, 0600)
+	return writeFileAtomicBytes(syncConfigPath(vaultPath), 0600, b)
 }
 
 func ensureSyncClient(s *vaultSession) error {
@@ -186,7 +187,11 @@ func collectLocalSyncItems(vaultPath string, since int64, deviceID string) ([]pr
 		}
 		chk := enc.Checksum
 		if chk == "" {
-			sum := sha256.Sum256([]byte(enc.Data))
+			ct, err := zpencoding.Base64StdDecode(enc.Data)
+			if err != nil {
+				return nil, fmt.Errorf("decode item payload for checksum (%s): %w", fp, err)
+			}
+			sum := sha256.Sum256(ct)
 			chk = fmt.Sprintf("%x", sum)
 		}
 		out = append(out, protocol.SyncItem{

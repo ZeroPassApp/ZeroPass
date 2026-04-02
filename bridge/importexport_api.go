@@ -70,15 +70,9 @@ func exportToFile(s *vaultSession, path string, fn func([]types.Item, io.Writer)
 		items = append(items, *p)
 	}
 
-	if err := ensureParentDir(path); err != nil {
-		return err
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return fn(items, f)
+	return writeFileAtomic(path, 0600, func(w io.Writer) error {
+		return fn(items, w)
+	})
 }
 
 func copyMap(in map[string]string) map[string]string {
@@ -101,15 +95,15 @@ func ZPImportCSV(handle C.long, path *C.char) (res C.ZPResult) {
 	if fp == "" {
 		return errorResult(fmt.Errorf("path must not be empty"))
 	}
-	
+
 	s, err := getSession(h)
 	if err != nil {
 		return errorResult(err)
 	}
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	mapping := importexport.CSVMapping{ // compatible with ExportCSV
 		Name:     0,
 		Type:     1,
@@ -253,15 +247,15 @@ func exportSimple(handle C.long, path *C.char, fn func([]types.Item, io.Writer) 
 	if fp == "" {
 		return errorResult(fmt.Errorf("path must not be empty"))
 	}
-	
+
 	s, err := getSession(h)
 	if err != nil {
 		return errorResult(err)
 	}
-	
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	if err := exportToFile(s, fp, fn); err != nil {
 		return errorResult(err)
 	}
@@ -279,13 +273,7 @@ func exportEncryptedToFile(s *vaultSession, path string, key []byte) error {
 			items = append(items, *p)
 		}
 	}
-	if err := ensureParentDir(path); err != nil {
-		return err
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return importexport.ExportEncrypted(items, key, f)
+	return writeFileAtomic(path, 0600, func(w io.Writer) error {
+		return importexport.ExportEncrypted(items, key, w)
+	})
 }

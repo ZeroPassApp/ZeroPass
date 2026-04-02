@@ -28,7 +28,7 @@
 │  ┌────────────────────▼────────────────────────────────────┐   │
 │  │  Storage Layer                                          │   │
 │  │  • Encrypted JSON files ({id}.json)                     │   │
-│  │  • SQLite FTS5 index (searchable metadata)              │   │
+│  │  • SQLite FTS5 index (index.db; locked → index.db.enc)  │   │
 │  │  • Version history ({id}.versions.json)                 │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │

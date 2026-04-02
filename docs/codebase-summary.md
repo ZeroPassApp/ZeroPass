@@ -127,18 +127,22 @@ Lock()
 **Storage Format:**
 ```
 vault/
-├── vault.json            # Vault metadata (salt, encrypted keys, vault_key_check, config)
-├── index.db              # SQLite FTS5 index (searchable metadata, no plaintext)
+├── vault.json                  # Vault metadata (salt, encrypted keys, vault_key_check, config)
+├── vault.lock                  # Advisory lock (bridge only; held for session lifetime)
+├── index.db                    # SQLite FTS5 index while unlocked (may include plaintext indexed fields)
+├── index.db-wal                # SQLite sidecar (unlocked)
+├── index.db-shm                # SQLite sidecar (unlocked)
+├── index.db.enc                # Encrypted index at rest when locked (plaintext index removed)
 └── items/
-    ├── {item_id}.json          # Encrypted item
-    └── {item_id}.versions.json # Version history metadata
+    ├── {item_id}.json          # Encrypted item (base64 ciphertext + checksum)
+    └── {item_id}.versions.json # Encrypted version snapshots (legacy plaintext migrated on read)
 ```
 
 **Key Patterns:**
 - Interface-based DI for storage backends (SwappableStore interface)
 - Auto lock on N minutes of inactivity
 - Versioning for rollback capability
-- FTS5 query sanitization (strip special chars, no wildcards)
+- FTS5 query sanitization (strip special chars; user wildcards removed; prefix matching appended internally)
 - Vault metadata writes are atomic (temp + sync + rename) to reduce corruption risk
 - Vault metadata preserves unknown JSON fields for forward/backward compatibility
 - `vault_key_check` enables safe raw-key unlock (`UnlockWithKey`) for future TouchID/keychain flows

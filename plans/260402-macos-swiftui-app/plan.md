@@ -122,19 +122,18 @@ Completed in Phase 0 (unblocks Phase 1):
 
 ## File Ownership Matrix
 
-/Volumes/DATA/Developments/ZeroPass/apps/macos/ZeroPass
-
 ```
-bridge/                     → Phase 1 (Go)
-macos/ZeroPass/Bridge/      → Phase 2 (Swift bridge)
-macos/ZeroPass/Views/Auth/  → Phase 3
-macos/ZeroPass/Views/Main/  → Phase 4
-macos/ZeroPass/Views/Items/ → Phase 5
-macos/ZeroPass/Views/Search/→ Phase 6
-macos/ZeroPass/Services/    → Phase 7
-macos/ZeroPass/Views/Settings/ → Phase 8
-macos/scripts/              → Phase 9
-macos/ZeroPassTests/        → Phase 10
+bridge/                                       → Phase 1 (Go)
+apps/macos/ZeroPass/ZeroPass/Bridge/          → Phase 2 (Swift bridge)
+apps/macos/ZeroPass/ZeroPass/Views/Auth/      → Phase 3
+apps/macos/ZeroPass/ZeroPass/Views/Main/      → Phase 4
+apps/macos/ZeroPass/ZeroPass/Views/Items/     → Phase 5
+apps/macos/ZeroPass/ZeroPass/Views/Search/    → Phase 6
+apps/macos/ZeroPass/ZeroPass/Services/        → Phase 7
+apps/macos/ZeroPass/ZeroPass/Views/Settings/  → Phase 8
+apps/macos/scripts/                           → Phase 9 (planned)
+apps/macos/ZeroPass/ZeroPassTests/            → Phase 10
+apps/macos/ZeroPass/ZeroPassUITests/          → Phase 10
 ```
 
 ## Dependencies

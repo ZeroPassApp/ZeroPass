@@ -50,7 +50,7 @@
 typedef struct {
     char* data;   // JSON string (NULL if no data), caller frees via ZPFree
     char* error;  // Error message (NULL on success), caller frees via ZPFree
-    int   code;   // 0=ok, 1=locked, 2=not_found, 3=auth_failed, 4=internal
+    int   code;   // 0=ok, 1=locked, 2=not_found, 3=auth_failed, 4=internal, 5=busy
 } ZPResult;
 ```
 
