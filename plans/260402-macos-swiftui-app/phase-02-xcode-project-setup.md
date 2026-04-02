@@ -7,7 +7,7 @@
 
 ## Overview
 - **Priority:** P0
-- **Status:** Pending
+- **Status:** In Progress
 - **Description:** Create the Xcode project, integrate `libzeropass.a` static library, and build the Swift bridge wrapper that provides clean, type-safe, async Swift API over the C exports.
 
 ## Design Foundation (from [UI/UX Guideline](./reports/ui-ux-design-guideline.md))

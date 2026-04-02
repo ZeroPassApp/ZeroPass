@@ -72,8 +72,8 @@ Completed in Phase 0 (unblocks Phase 1):
 | # | Phase | Status | Effort | Link |
 |---|-------|--------|--------|------|
 | 0 | Go Core Prereqs (above) | Done | 1d | — |
-| 1 | Go Bridge Layer | Pending | 4d | [phase-01](./phase-01-go-bridge-layer.md) |
-| 2 | Xcode Project + Swift Bridge | Pending | 2d | [phase-02](./phase-02-xcode-project-setup.md) |
+| 1 | Go Bridge Layer | Done | 4d | [phase-01](./phase-01-go-bridge-layer.md) |
+| 2 | Xcode Project + Swift Bridge | In Progress | 2d | [phase-02](./phase-02-xcode-project-setup.md) |
 | 3 | Authentication Views | Pending | 2d | [phase-03](./phase-03-authentication-views.md) |
 | 4 | Main UI Layout | Pending | 3d | [phase-04](./phase-04-main-ui-layout.md) |
 | 5 | Item CRUD Views | Pending | 4d | [phase-05](./phase-05-item-crud-views.md) |

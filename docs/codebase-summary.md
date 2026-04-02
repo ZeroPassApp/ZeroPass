@@ -2,11 +2,12 @@
 
 ## Overview
 
-ZeroPass codebase (~20K LOC, ~70 Go files) is organized into three tiers:
+ZeroPass codebase (~20K LOC, ~70 Go files) is organized into four tiers:
 
 1. **Core Layer** (`core/`) — Reusable crypto, vault, and sync engines
-2. **Packages Layer** (`packages/`) — CLI application and planned SDK
-3. **Services Layer** (`services/`) — Self-hosted sync server
+2. **Bridge Layer** (`bridge/`) — CGO C ABI (Go `c-archive`) for native app integration
+3. **Packages Layer** (`packages/`) — CLI application and planned SDK
+4. **Services Layer** (`services/`) — Self-hosted sync server
 
 **Module Structure:**
 ```
@@ -15,6 +16,7 @@ github.com/zeropass/zeropass/
 │   ├── crypto/      # Encryption engine, key management, password generation
 │   ├── vault/       # Vault CRUD, search, versioning, health, import/export
 │   └── sync/        # Delta sync client/server, conflict resolution
+├── bridge/          # CGO bridge (C ABI) for native apps (SwiftUI, etc.)
 ├── packages/
 │   ├── cli/         # CLI application (Cobra-based)
 │   └── sdk/         # SDK (planned, empty)
