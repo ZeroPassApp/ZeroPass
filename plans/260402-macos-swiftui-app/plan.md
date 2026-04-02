@@ -1,7 +1,7 @@
 ---
 title: "ZeroPass macOS SwiftUI Native App"
 description: "Build native macOS app using SwiftUI + Go c-archive bridge for the ZeroPass credential manager"
-status: pending
+status: in_progress
 priority: P1
 effort: 28d
 branch: feat/macos-app
@@ -61,17 +61,17 @@ Full menu structure defined in [Guideline §15](./reports/ui-ux-design-guideline
 
 ## Phases
 
-## Pre-Implementation Requirements (from Gap Analysis)
+## Phase 0 Completed (Go Core Prereqs)
 
-These Go core changes MUST be completed before Phase 1:
+Completed in Phase 0 (unblocks Phase 1):
 
-1. **Implement `ChangeMasterPassword(oldPassword, newPassword string) error`** in `core/vault/store/store.go` — needed by Phase 8 Settings
-2. **Implement `UnlockWithKey(vaultKey []byte) error`** in `core/vault/store/store.go` — needed by Phase 3 TouchID (bypasses KDF)
-3. **Update PRD deployment target** from macOS 13+ to **macOS 14+** (required for @Observable)
+1. **Implemented `ChangeMasterPassword(oldPassword, newPassword string) error`** in `core/vault/store/store.go` — needed by Phase 8 Settings
+2. **Implemented `UnlockWithKey(vaultKey []byte) error`** in `core/vault/store/store.go` — needed by Phase 3 TouchID (bypasses KDF)
+3. **Updated PRD deployment target** from macOS 13+ to **macOS 14+** (required for @Observable)
 
 | # | Phase | Status | Effort | Link |
 |---|-------|--------|--------|------|
-| 0 | Go Core Prereqs (above) | Pending | 1d | — |
+| 0 | Go Core Prereqs (above) | Done | 1d | — |
 | 1 | Go Bridge Layer | Pending | 4d | [phase-01](./phase-01-go-bridge-layer.md) |
 | 2 | Xcode Project + Swift Bridge | Pending | 2d | [phase-02](./phase-02-xcode-project-setup.md) |
 | 3 | Authentication Views | Pending | 2d | [phase-03](./phase-03-authentication-views.md) |

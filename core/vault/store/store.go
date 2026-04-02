@@ -3,6 +3,7 @@
 package store
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/zeropass/zeropass/core/crypto"
+	aesgcm "github.com/zeropass/zeropass/core/crypto/cipher"
 	"github.com/zeropass/zeropass/core/crypto/encoding"
 	"github.com/zeropass/zeropass/core/crypto/kdf"
 	"github.com/zeropass/zeropass/core/crypto/key"
@@ -45,11 +47,62 @@ func DefaultConfig() VaultConfig {
 
 // VaultMetadata is persisted to vault.json.
 type VaultMetadata struct {
-	Salt                 string     `json:"salt"`                   // hex-encoded
-	EncryptedVaultKey    string     `json:"encrypted_vault_key"`    // base64
-	EncryptedRecoveryKey string     `json:"encrypted_recovery_key"` // base64
-	CreatedAt            time.Time  `json:"created_at"`
+	Salt                 string      `json:"salt"`                      // hex-encoded
+	EncryptedVaultKey    string      `json:"encrypted_vault_key"`       // base64
+	EncryptedRecoveryKey string      `json:"encrypted_recovery_key"`    // base64
+	VaultKeyCheck        string      `json:"vault_key_check,omitempty"` // base64(AEAD(vaultKey, "zeropass:vault-key-check:v1"))
+	CreatedAt            time.Time   `json:"created_at"`
 	Config               VaultConfig `json:"config"`
+
+	extra map[string]json.RawMessage `json:"-"`
+}
+
+func (m *VaultMetadata) UnmarshalJSON(data []byte) error {
+	type alias VaultMetadata
+	var a alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*m = VaultMetadata(a)
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	delete(raw, "salt")
+	delete(raw, "encrypted_vault_key")
+	delete(raw, "encrypted_recovery_key")
+	delete(raw, "vault_key_check")
+	delete(raw, "created_at")
+	delete(raw, "config")
+
+	if len(raw) > 0 {
+		m.extra = raw
+	}
+	return nil
+}
+
+func (m VaultMetadata) MarshalJSON() ([]byte, error) {
+	type alias VaultMetadata
+
+	b, err := json.Marshal(alias(m))
+	if err != nil {
+		return nil, err
+	}
+
+	var out map[string]json.RawMessage
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+
+	for k, v := range m.extra {
+		if _, ok := out[k]; ok {
+			continue
+		}
+		out[k] = v
+	}
+
+	return json.Marshal(out)
 }
 
 // CreateResult is returned from Create with secrets the user must save.
@@ -68,6 +121,64 @@ type Vault struct {
 	// auto-lock
 	lastAccess time.Time
 	autoTimer  *time.Timer
+}
+
+const vaultKeyCheckMagic = "zeropass:vault-key-check:v1"
+
+func makeVaultKeyCheck(vaultKey []byte) (string, error) {
+	if len(vaultKey) != key.VaultKeySize {
+		return "", fmt.Errorf("vault key must be %d bytes", key.VaultKeySize)
+	}
+	c := aesgcm.New()
+	ct, err := c.Encrypt([]byte(vaultKeyCheckMagic), vaultKey)
+	if err != nil {
+		return "", err
+	}
+	return encoding.Base64StdEncode(ct), nil
+}
+
+func verifyVaultKeyCheck(check string, vaultKey []byte) error {
+	if check == "" {
+		return errors.New("vault key check is missing")
+	}
+	ct, err := encoding.Base64StdDecode(check)
+	if err != nil {
+		return fmt.Errorf("decode vault key check: %w", err)
+	}
+	c := aesgcm.New()
+	pt, err := c.Decrypt(ct, vaultKey)
+	if err != nil {
+		return errors.New("invalid vault key")
+	}
+	if !bytes.Equal(pt, []byte(vaultKeyCheckMagic)) {
+		return errors.New("invalid vault key")
+	}
+	return nil
+}
+
+// ensureVaultKeyCheckLocked ensures VaultMetadata.VaultKeyCheck exists and is valid.
+// Caller must hold v.mu.
+func (v *Vault) ensureVaultKeyCheckLocked(vaultKey []byte) {
+	if v.meta == nil {
+		return
+	}
+	if v.meta.VaultKeyCheck != "" {
+		if err := verifyVaultKeyCheck(v.meta.VaultKeyCheck, vaultKey); err == nil {
+			return
+		}
+	}
+
+	check, err := makeVaultKeyCheck(vaultKey)
+	if err != nil {
+		return
+	}
+
+	metaCopy := *v.meta
+	metaCopy.VaultKeyCheck = check
+	if err := writeMetadata(v.path, &metaCopy); err != nil {
+		return
+	}
+	v.meta.VaultKeyCheck = check
 }
 
 // Create creates a new vault on disk and returns the recovery mnemonic.
@@ -117,11 +228,18 @@ func Create(masterPassword string, vaultPath string, cfg VaultConfig) (*Vault, *
 		return nil, nil, fmt.Errorf("encrypt vault key with recovery: %w", err)
 	}
 
+	check, err := makeVaultKeyCheck(vaultKey)
+	if err != nil {
+		crypto.ZeroBytes(vaultKey)
+		return nil, nil, fmt.Errorf("vault key check: %w", err)
+	}
+
 	// Build metadata.
 	meta := &VaultMetadata{
 		Salt:                 encoding.HexEncode(mk.Salt()),
 		EncryptedVaultKey:    encoding.Base64StdEncode(encVK.Ciphertext),
 		EncryptedRecoveryKey: encoding.Base64StdEncode(encRK.Ciphertext),
+		VaultKeyCheck:        check,
 		CreatedAt:            time.Now().UTC(),
 		Config:               cfg,
 	}
@@ -192,6 +310,7 @@ func (v *Vault) Unlock(masterPassword string) error {
 	v.locked = false
 	v.lastAccess = time.Now()
 	v.startAutoLock()
+	v.ensureVaultKeyCheckLocked(vaultKey)
 
 	// Decrypt index file at rest (best-effort).
 	_ = index.DecryptIndexFile(v.IndexPath(), v.vaultKey)
@@ -222,10 +341,104 @@ func (v *Vault) UnlockWithRecovery(mnemonic string) error {
 	v.locked = false
 	v.lastAccess = time.Now()
 	v.startAutoLock()
+	v.ensureVaultKeyCheckLocked(vaultKey)
 
 	// Decrypt index file at rest (best-effort).
 	_ = index.DecryptIndexFile(v.IndexPath(), v.vaultKey)
 
+	return nil
+}
+
+// UnlockWithKey unlocks the vault using a raw vault key (e.g. TouchID flow).
+// The provided key must be validated against VaultMetadata.VaultKeyCheck.
+func (v *Vault) UnlockWithKey(vaultKey []byte) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if !v.locked {
+		return nil
+	}
+	if len(vaultKey) != key.VaultKeySize {
+		return fmt.Errorf("vault key must be %d bytes", key.VaultKeySize)
+	}
+	if v.meta.VaultKeyCheck == "" {
+		return errors.New("vault key unlock not available: unlock with password once to upgrade vault metadata")
+	}
+
+	vk := make([]byte, len(vaultKey))
+	copy(vk, vaultKey)
+
+	if err := verifyVaultKeyCheck(v.meta.VaultKeyCheck, vk); err != nil {
+		crypto.ZeroBytes(vk)
+		return fmt.Errorf("unlock vault with key: %w", err)
+	}
+
+	// Decrypt index file at rest (best-effort).
+	_ = index.DecryptIndexFile(v.IndexPath(), vk)
+
+	v.vaultKey = vk
+	v.locked = false
+	v.lastAccess = time.Now()
+	v.startAutoLock()
+	return nil
+}
+
+// ChangeMasterPassword re-encrypts the vault key with a new master password.
+func (v *Vault) ChangeMasterPassword(oldPassword, newPassword string) error {
+	if newPassword == "" {
+		return errors.New("new password must not be empty")
+	}
+
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	salt, err := encoding.HexDecode(v.meta.Salt)
+	if err != nil {
+		return fmt.Errorf("decode salt: %w", err)
+	}
+
+	k := kdf.NewDefault()
+	mkOld, err := key.DeriveMasterKeyWithSalt([]byte(oldPassword), salt, k)
+	if err != nil {
+		return fmt.Errorf("derive master key: %w", err)
+	}
+	defer mkOld.Zero()
+
+	encBytes, err := encoding.Base64StdDecode(v.meta.EncryptedVaultKey)
+	if err != nil {
+		return fmt.Errorf("decode encrypted vault key: %w", err)
+	}
+
+	vk, err := key.DecryptVaultKey(&key.EncryptedVaultKey{Ciphertext: encBytes}, mkOld.Key())
+	if err != nil {
+		return fmt.Errorf("verify old password: %w", err)
+	}
+	defer crypto.ZeroBytes(vk)
+
+	mkNew, err := key.DeriveNewMasterKey([]byte(newPassword), k)
+	if err != nil {
+		return fmt.Errorf("derive new master key: %w", err)
+	}
+	defer mkNew.Zero()
+
+	encVK, err := key.EncryptVaultKey(vk, mkNew.Key())
+	if err != nil {
+		return fmt.Errorf("encrypt vault key: %w", err)
+	}
+
+	newSalt := encoding.HexEncode(mkNew.Salt())
+	newEnc := encoding.Base64StdEncode(encVK.Ciphertext)
+
+	metaCopy := *v.meta
+	metaCopy.Salt = newSalt
+	metaCopy.EncryptedVaultKey = newEnc
+
+	if err := writeMetadata(v.path, &metaCopy); err != nil {
+		return fmt.Errorf("persist metadata: %w", err)
+	}
+
+	v.meta.Salt = newSalt
+	v.meta.EncryptedVaultKey = newEnc
 	return nil
 }
 
@@ -320,10 +533,51 @@ func writeMetadata(vaultPath string, meta *VaultMetadata) error {
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
+
 	fp := filepath.Join(vaultPath, VaultMetaFile)
-	if err := os.WriteFile(fp, data, 0600); err != nil {
-		return fmt.Errorf("write metadata: %w", err)
+	dir := filepath.Dir(fp)
+
+	f, err := os.CreateTemp(dir, VaultMetaFile+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("create tmp metadata: %w", err)
 	}
+	tmpPath := f.Name()
+
+	written := 0
+	for written < len(data) {
+		n, err := f.Write(data[written:])
+		if err != nil {
+			f.Close()
+			os.Remove(tmpPath)
+			return fmt.Errorf("write tmp metadata: %w", err)
+		}
+		if n == 0 {
+			f.Close()
+			os.Remove(tmpPath)
+			return fmt.Errorf("short write tmp metadata: wrote %d of %d", written, len(data))
+		}
+		written += n
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("sync tmp metadata: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("close tmp metadata: %w", err)
+	}
+
+	if err := atomicReplaceFile(tmpPath, fp); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("finalize metadata: %w", err)
+	}
+
+	if d, err := os.Open(dir); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+
 	return nil
 }
 

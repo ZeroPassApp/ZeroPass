@@ -4,7 +4,8 @@
 
 ### System Requirements
 
-- **OS:** macOS, Linux, or Windows (with Git Bash)
+- **OS (official support):** macOS 14+ (Sonoma and later) or Linux
+- **Windows:** best-effort only (not an official support target yet)
 - **Go:** 1.26.1 or later (download from [golang.org](https://golang.org/dl))
 - **Git:** 2.30+
 - **SQLite3:** Bundled with Go driver (no external installation needed)

@@ -160,7 +160,7 @@ User loses master password
   │ • SQLite index init    │            │
   └────────┬───────────────┘            │
            │                            │
-           │ Unlock(password|recovery)  │
+           │ Unlock(password|recovery|vaultKey)  │
            ▼                            │
   ┌────────────────────────┐            │
   │ Unlocked (Open)        │     ┌──────┴─────┐
@@ -478,27 +478,27 @@ Server receives push from B at 10:00:10:
 }
 ```
 
-### VaultMetadata
+### VaultMetadata (vault.json)
 
 ```json
 {
-  "version": "1",
-  "kdf": {
-    "algorithm": "argon2id",
-    "memory_mib": 64,
-    "iterations": 3,
-    "parallelism": 4,
-    "salt": "base64(...)"
-  },
-  "vault_key_encrypted": "base64(aes-gcm-ciphertext)",
-  "vault_key_nonce": "base64(...)",
-  "vault_key_auth_tag": "base64(...)",
-  "recovery_key_encrypted": "base64(aes-gcm-ciphertext)",
-  "recovery_key_nonce": "base64(...)",
-  "recovery_key_auth_tag": "base64(...)",
-  "created_at": "2026-04-01T10:00:00Z"
+  "salt": "hex(...)",
+  "encrypted_vault_key": "base64(...)",
+  "encrypted_recovery_key": "base64(...)",
+  "vault_key_check": "base64(...)",
+  "created_at": "2026-04-01T10:00:00Z",
+  "config": {
+    "auto_lock_timeout": 900000000000,
+    "clipboard_clear_sec": 30,
+    "max_versions": 10
+  }
 }
 ```
+
+Notes:
+- `vault_key_check` enables validating a raw vault key for `UnlockWithKey` (e.g. TouchID/keychain flows).
+- Vault metadata reads/writes preserve unknown JSON fields (forward/backward compatibility).
+- Vault metadata writes use atomic replace semantics (tmp + sync + rename + best-effort directory sync).
 
 ---
 
@@ -507,15 +507,15 @@ Server receives push from B at 10:00:10:
 ### Local Storage
 
 ```
-~/.zeropass/
-├── metadata.json              # Encrypted vault config
+~/.zeropass/vaults/default/
+├── vault.json                 # Vault metadata (salt, encrypted keys, vault_key_check, config)
 ├── index.db                   # SQLite FTS5 (searchable metadata)
 ├── index.db-journal           # SQLite transaction log
 ├── index.db-wal               # SQLite write-ahead log (Phase 2+)
-├── 550e8400-...json           # Encrypted item 1
-├── 550e8400-...json.sha256    # Checksum 1
-├── 550e8400-...versions.json  # Version history 1
-├── [more items...]
+├── items/
+│   ├── 550e8400-...json            # Encrypted item 1
+│   ├── 550e8400-...versions.json   # Version history 1
+│   └── [more items...]
 └── .zeropass.lock             # Vault lock file (prevents concurrent access)
 ```
 

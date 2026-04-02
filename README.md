@@ -61,6 +61,13 @@ zeropass/
 - **All metadata encrypted** (unlike LastPass)
 - **Memory zeroing** for all sensitive data
 - **HIBP integration** (opt-in, k-anonymity model)
+- **Crash-safe vault metadata** — `vault.json` persisted via atomic replace writes
+- **Forward-compatible vault metadata** — unknown `vault.json` fields preserved on read/write
+
+## Platform Support
+
+- **CLI:** macOS, Linux (x86_64, arm64)
+- **macOS app:** macOS 14+ (Sonoma and later)
 
 ## CLI Commands
 

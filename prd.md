@@ -360,7 +360,7 @@ zeropass recovery                          # Show/regenerate recovery key
 
 ### Compatibility
 
-* macOS 13+ (Ventura and later)
+* macOS 14+ (Sonoma and later)
 * CLI: macOS, Linux (x86_64, arm64)
 * Future: Windows, iOS, Android
 

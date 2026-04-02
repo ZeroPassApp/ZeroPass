@@ -108,6 +108,12 @@ Open(vaultPath)
 Unlock(password | recovery_mnemonic)
   → Derive key from password/mnemonic
   → Decrypt vault key
+  → (Best-effort) upgrade/repair vault metadata for key-based unlock
+  → Load items into memory (encrypted)
+  → Build searchable index
+
+UnlockWithKey(vaultKey)
+  → Validate vaultKey against vault metadata (`vault_key_check`)
   → Load items into memory (encrypted)
   → Build searchable index
   
@@ -119,12 +125,11 @@ Lock()
 **Storage Format:**
 ```
 vault/
-├── metadata.json         # Encrypted vault config (Argon2 params, salt, vault key)
-├── index.db             # SQLite FTS5 index (searchable metadata, no plaintext)
-├── {item_id}.json       # Encrypted item (per-item key + AES-256-GCM)
-├── {item_id}.json.sha256 # SHA-256 checksum for integrity
-├── {item_id}.versions.json # Version history metadata
-└── recovery.txt         # BIP-39 12-word mnemonic (printed/secured externally)
+├── vault.json            # Vault metadata (salt, encrypted keys, vault_key_check, config)
+├── index.db              # SQLite FTS5 index (searchable metadata, no plaintext)
+└── items/
+    ├── {item_id}.json          # Encrypted item
+    └── {item_id}.versions.json # Version history metadata
 ```
 
 **Key Patterns:**
@@ -132,7 +137,9 @@ vault/
 - Auto lock on N minutes of inactivity
 - Versioning for rollback capability
 - FTS5 query sanitization (strip special chars, no wildcards)
-- Per-item encryption prevents bulk decryption from compromised vault key
+- Vault metadata writes are atomic (temp + sync + rename) to reduce corruption risk
+- Vault metadata preserves unknown JSON fields for forward/backward compatibility
+- `vault_key_check` enables safe raw-key unlock (`UnlockWithKey`) for future TouchID/keychain flows
 
 ---
 
