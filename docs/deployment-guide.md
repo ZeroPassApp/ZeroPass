@@ -69,13 +69,21 @@ xcodebuild test \
   -destination 'platform=macOS,arch=arm64' \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
-# Archive (Release). Produces: dist/macos/ZeroPass.xcarchive
+# Archive (Release) + create artifacts under dist/macos/
+# (ZeroPass.xcarchive, ZeroPass.zip, ZeroPass.dmg)
 CODE_SIGNING_ALLOWED=NO bash apps/macos/scripts/build.sh
+
+# Signed + notarized release (requires Apple credentials)
+# Recommended once-per-machine setup:
+#   xcrun notarytool store-credentials "zp-notary" --apple-id <id> --team-id <team> --password <app-specific>
+# Then:
+#   NOTARY_KEYCHAIN_PROFILE="zp-notary" NOTARIZE=YES bash apps/macos/scripts/build.sh
 ```
 
 Notes:
 - The Xcode project builds the Go bridge as part of the app target via a build phase that runs `make -C bridge build-universal`.
 - Optional packaging scripts live in `apps/macos/scripts/` (e.g. `create-dmg.sh`, `notarize.sh`).
+- Security tradeoff: the project currently sets `ENABLE_USER_SCRIPT_SANDBOXING=NO` to avoid Go cache/mod-cache sandbox issues. Keep this in mind for tighter build isolation.
 
 ### Cross-Compile
 

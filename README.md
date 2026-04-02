@@ -117,6 +117,8 @@ Prereqs: Xcode (for `xcodebuild`/`lipo`), Go (per `go.mod`), and `make`.
 
 Note: Xcode GUI builds may run with a minimal `PATH`. The ZeroPass Xcode target’s build phase exports `PATH` to include common Go install locations (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/local/go/bin`) so `go` is found. If your Go is installed elsewhere, update the build phase script accordingly.
 
+Security note: the project currently sets `ENABLE_USER_SCRIPT_SANDBOXING=NO` so the bridge build script can access Go’s caches/module downloads. This improves dev UX but increases the blast radius of scripts; revisit if you need stricter build isolation.
+
 ```bash
 # Run macOS app unit tests (no signing)
 xcodebuild test \
@@ -125,8 +127,15 @@ xcodebuild test \
   -destination 'platform=macOS,arch=arm64' \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
 
-# Create an unsigned Release archive at dist/macos/ZeroPass.xcarchive
+# Create an unsigned Release archive + artifacts under dist/macos/
+# (ZeroPass.xcarchive, ZeroPass.zip, ZeroPass.dmg)
 CODE_SIGNING_ALLOWED=NO bash apps/macos/scripts/build.sh
+
+# Signed + notarized release (requires Apple credentials)
+# Recommended once-per-machine setup:
+#   xcrun notarytool store-credentials "zp-notary" --apple-id <id> --team-id <team> --password <app-specific>
+# Then:
+#   NOTARY_KEYCHAIN_PROFILE="zp-notary" NOTARIZE=YES bash apps/macos/scripts/build.sh
 ```
 
 ## CI

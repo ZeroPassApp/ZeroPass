@@ -38,3 +38,10 @@ xcuserdata/
 *.xcscmblueprint
 *.xccheckout
 .swiftpm/
+
+# Local app data / dev artifacts
+index.db
+index.db-*
+items/
+vault.json
+vault.lock
