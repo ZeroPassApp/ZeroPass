@@ -32,4 +32,9 @@ hdiutil create \
   -format UDZO \
   "$DMG_PATH" >/dev/null
 
+# If the app was signed with Developer ID, sign the DMG as well so Gatekeeper can assess it.
+if [[ -n "${CODE_SIGN_IDENTITY:-}" ]]; then
+  /usr/bin/codesign --force --sign "$CODE_SIGN_IDENTITY" --timestamp "$DMG_PATH"
+fi
+
 echo "Created DMG: $DMG_PATH"
