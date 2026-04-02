@@ -20,3 +20,17 @@ coverage.html
 *.key
 cli
 syncserver
+
+# bridge build outputs
+bridge/*.a
+bridge/*.h
+bridge/*.tmp
+
+# Xcode
+DerivedData/
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+.swiftpm/
