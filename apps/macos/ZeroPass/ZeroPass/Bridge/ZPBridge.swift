@@ -102,6 +102,30 @@ enum ZPBridge {
         }
     }
 
+    struct GeneratePasswordOptions: Codable {
+        var uppercase: Bool = true
+        var lowercase: Bool = true
+        var digits: Bool = true
+        var symbols: Bool = true
+        var excludeAmbiguous: Bool = false
+
+        enum CodingKeys: String, CodingKey {
+            case uppercase = "Uppercase"
+            case lowercase = "Lowercase"
+            case digits = "Digits"
+            case symbols = "Symbols"
+            case excludeAmbiguous = "ExcludeAmbiguous"
+        }
+    }
+
+    struct GeneratedPassword: Codable {
+        let password: String
+    }
+
+    struct GeneratedPassphrase: Codable {
+        let passphrase: String
+    }
+
     private static func dataFromResult(_ result: ZPResult) throws -> Data {
         let r = result
         defer { ZPFreeResult(r) }
@@ -333,5 +357,32 @@ enum ZPBridge {
             ZPScorePassword(pw)
         }
         return try decode(PasswordScore.self, from: res)
+    }
+
+    static func generatePassword(length: Int, options: GeneratePasswordOptions? = nil) throws -> String {
+        let optJSON: String
+        if let options {
+            let d = try ZPJSON.encoder.encode(options)
+            optJSON = String(decoding: d, as: UTF8.self)
+        } else {
+            optJSON = ""
+        }
+
+        if optJSON.isEmpty {
+            let res = ZPGeneratePassword(Int32(length), nil)
+            return try decode(GeneratedPassword.self, from: res).password
+        }
+
+        let res: ZPResult = withMutableCString(optJSON) { opts in
+            ZPGeneratePassword(Int32(length), opts)
+        }
+        return try decode(GeneratedPassword.self, from: res).password
+    }
+
+    static func generatePassphrase(words: Int, separator: String = "-") throws -> String {
+        let res: ZPResult = withMutableCString(separator) { sep in
+            ZPGeneratePassphrase(Int32(words), sep)
+        }
+        return try decode(GeneratedPassphrase.self, from: res).passphrase
     }
 }

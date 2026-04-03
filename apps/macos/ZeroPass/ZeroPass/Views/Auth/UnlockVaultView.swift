@@ -7,47 +7,92 @@ struct UnlockVaultView: View {
     @State private var mnemonic: String = ""
     @State private var useRecovery = false
     @State private var isBusy = false
+    @State private var showError = false
+    @State private var errorMessage = ""
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Unlock Vault")
-                .font(.title2)
-                .bold()
+        VStack(spacing: 0) {
+            Spacer()
 
-            Toggle("Use recovery phrase", isOn: $useRecovery)
+            VStack(spacing: 20) {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
 
-            if useRecovery {
-                TextField("Recovery phrase", text: $mnemonic)
-            } else {
-                SecureField("Master Password", text: $password)
-            }
+                VStack(spacing: 4) {
+                    Text("Unlock Vault")
+                        .font(.title2)
+                        .bold()
 
-            if let err = vault.lastError {
-                Text(err)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            }
-
-            HStack {
-                Button("Close Vault") {
-                    Task { await vault.closeVault() }
-                }
-                .disabled(isBusy)
-
-                Spacer()
-
-                if !useRecovery, vault.biometricUnlockEnabled, vault.isBiometricAvailable {
-                    Button("Unlock with Touch ID") { unlockWithBiometrics() }
-                        .disabled(isBusy)
+                    Text(vault.vaultName)
+                        .font(.subheadline)
+                        .foregroundStyle(.tertiary)
                 }
 
-                Button("Unlock") { unlock() }
-                    .disabled(isBusy || (useRecovery ? mnemonic.isEmpty : password.isEmpty))
+                VStack(spacing: 12) {
+                    if useRecovery {
+                        TextField("Recovery phrase", text: $mnemonic)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        SecureField("Master Password", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { unlock() }
+                    }
+
+                    Toggle("Use recovery phrase", isOn: $useRecovery)
+                        .font(.callout)
+                        .toggleStyle(.checkbox)
+                }
+                .frame(maxWidth: 280)
+
+                VStack(spacing: 8) {
+                    Button {
+                        unlock()
+                    } label: {
+                        Text("Unlock")
+                            .frame(maxWidth: 200)
+                    }
+                    .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
+                    .disabled(isBusy || (useRecovery ? mnemonic.isEmpty : password.isEmpty))
+
+                    if !useRecovery, vault.biometricUnlockEnabled, vault.isBiometricAvailable {
+                        Button {
+                            unlockWithBiometrics()
+                        } label: {
+                            Label("Unlock with Touch ID", systemImage: "touchid")
+                                .frame(maxWidth: 200)
+                        }
+                        .controlSize(.large)
+                        .disabled(isBusy)
+                    }
+                }
+            }
+
+            Spacer()
+
+            Button("Close Vault") {
+                Task { await vault.closeVault() }
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
+            .disabled(isBusy)
+            .padding(.bottom, 16)
+        }
+        .frame(minWidth: 480, minHeight: 360)
+        .alert("Unlock Failed", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
+        }
+        .onChange(of: vault.lastError) { _, newValue in
+            if let error = newValue, !error.isEmpty {
+                errorMessage = error
+                showError = true
+                vault.lastError = nil
             }
         }
-        .padding(24)
-        .frame(minWidth: 520, minHeight: 240)
     }
 
     private func unlock() {
@@ -63,7 +108,8 @@ struct UnlockVaultView: View {
                     try await vault.unlock(masterPassword: password)
                 }
             } catch {
-                vault.lastError = error.localizedDescription
+                errorMessage = error.localizedDescription
+                showError = true
             }
         }
     }
@@ -77,7 +123,8 @@ struct UnlockVaultView: View {
             do {
                 try await vault.unlockWithBiometrics()
             } catch {
-                vault.lastError = error.localizedDescription
+                errorMessage = error.localizedDescription
+                showError = true
             }
         }
     }

@@ -358,6 +358,81 @@ final class VaultClient: ObservableObject {
         return ids.compactMap { byID[$0] }
     }
 
+    // MARK: - Filtering & Counts
+
+    var favoriteCount: Int {
+        items.filter(\.favorite).count
+    }
+
+    var allTags: [String] {
+        Array(Set(items.flatMap(\.tags))).sorted()
+    }
+
+    func count(for type: VaultItemType) -> Int {
+        items.filter { $0.type == type }.count
+    }
+
+    func filteredItems(type: VaultItemType? = nil, tag: String? = nil, favoritesOnly: Bool = false, sortBy: String = "name", sortOrder: String = "asc") -> [VaultItem] {
+        var result = items
+
+        if let type {
+            result = result.filter { $0.type == type }
+        }
+        if favoritesOnly {
+            result = result.filter(\.favorite)
+        }
+        if let tag {
+            result = result.filter { $0.tags.contains(tag) }
+        }
+
+        switch sortBy {
+        case "name":
+            result.sort { sortOrder == "asc" ? $0.name.localizedCompare($1.name) == .orderedAscending : $0.name.localizedCompare($1.name) == .orderedDescending }
+        case "updated_at":
+            result.sort { sortOrder == "asc" ? $0.updatedAt < $1.updatedAt : $0.updatedAt > $1.updatedAt }
+        case "created_at":
+            result.sort { sortOrder == "asc" ? $0.createdAt < $1.createdAt : $0.createdAt > $1.createdAt }
+        case "type":
+            result.sort { sortOrder == "asc" ? $0.type.rawValue < $1.type.rawValue : $0.type.rawValue > $1.type.rawValue }
+        default:
+            break
+        }
+
+        return result
+    }
+
+    // MARK: - Password Generation
+
+    func generatePassword(length: Int = 20, options: ZPBridge.GeneratePasswordOptions? = nil) async throws -> String {
+        try await Task.detached(priority: .userInitiated) {
+            try ZPBridge.generatePassword(length: length, options: options)
+        }.value
+    }
+
+    func generatePassphrase(words: Int = 5, separator: String = "-") async throws -> String {
+        try await Task.detached(priority: .userInitiated) {
+            try ZPBridge.generatePassphrase(words: words, separator: separator)
+        }.value
+    }
+
+    func scorePassword(_ password: String) async throws -> ZPBridge.PasswordScore {
+        try await Task.detached(priority: .utility) {
+            try ZPBridge.scorePassword(password)
+        }.value
+    }
+
+    // MARK: - Vault Info
+
+    var vaultName: String {
+        vaultURL?.lastPathComponent ?? "ZeroPass"
+    }
+
+    func toggleFavorite(item: VaultItem) async throws {
+        var updated = item
+        updated.favorite = !item.favorite
+        try await saveItem(updated)
+    }
+
     func saveItem(_ item: VaultItem) async throws {
         guard let h = handle else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
 

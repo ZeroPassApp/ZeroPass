@@ -26,4 +26,31 @@ extension VaultItemType {
         case .custom: return .gray
         }
     }
+
+    var defaultFields: [String: String] {
+        switch self {
+        case .login: return ["username": "", "password": "", "url": ""]
+        case .apikey: return ["api_key": "", "api_secret": "", "endpoint": ""]
+        case .sshkey: return ["private_key": "", "public_key": "", "passphrase": ""]
+        case .note: return [:]
+        case .creditcard: return ["card_number": "", "expiry": "", "cvv": "", "cardholder": ""]
+        case .identity: return ["full_name": "", "email": "", "phone": "", "address": ""]
+        case .passkey: return ["credential_id": "", "relying_party": "", "user_handle": ""]
+        case .custom: return [:]
+        }
+    }
+
+    /// Field keys that contain sensitive data and should be masked by default
+    var sensitiveFieldKeys: Set<String> {
+        switch self {
+        case .login: return ["password"]
+        case .apikey: return ["api_secret", "api_key"]
+        case .sshkey: return ["private_key", "passphrase"]
+        case .note: return []
+        case .creditcard: return ["cvv", "card_number"]
+        case .identity: return []
+        case .passkey: return ["credential_id"]
+        case .custom: return []
+        }
+    }
 }
