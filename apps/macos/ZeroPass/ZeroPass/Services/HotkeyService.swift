@@ -25,7 +25,7 @@ final class HotkeyService {
     func register(_ hotkey: Hotkey) {
         unregister()
 
-        var id = EventHotKeyID(signature: signature, id: hotKeyID)
+        let id = EventHotKeyID(signature: signature, id: hotKeyID)
         let status = RegisterEventHotKey(
             hotkey.keyCode,
             hotkey.modifiers,

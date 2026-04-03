@@ -16,7 +16,7 @@ struct MainShellView: View {
         NavigationSplitView {
             SidebarView(selectedCategory: $selectedCategory)
                 .environmentObject(vault)
-                .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+                .navigationSplitViewColumnWidth(min: 180, ideal: 220)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Sidebar")
         } content: {
@@ -26,7 +26,7 @@ struct MainShellView: View {
                 editingItem: $editingItem
             )
             .environmentObject(vault)
-            .navigationSplitViewColumnWidth(min: 220, ideal: 280)
+            .navigationSplitViewColumnWidth(min: 240, ideal: 300)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Item list")
         } detail: {

@@ -9,6 +9,8 @@ struct UnlockVaultView: View {
     @State private var isBusy = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var iconAppeared = false
+    @State private var shakeOffset: CGFloat = 0
 
     private enum Field { case password, mnemonic }
     @FocusState private var focusedField: Field?
@@ -17,10 +19,11 @@ struct UnlockVaultView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.tint)
+                    .symbolEffect(.appear, isActive: iconAppeared)
                     .accessibilityHidden(true)
 
                 VStack(spacing: 4) {
@@ -40,44 +43,47 @@ struct UnlockVaultView: View {
                             .focused($focusedField, equals: .mnemonic)
                             .accessibilityLabel("Recovery phrase")
                     } else {
-                        SecureField("Master Password", text: $password)
-                            .textFieldStyle(.roundedBorder)
-                            .onSubmit { unlock() }
-                            .focused($focusedField, equals: .password)
-                            .accessibilityLabel("Master password")
+                        HStack(spacing: 8) {
+                            SecureField("Master Password", text: $password)
+                                .textFieldStyle(.roundedBorder)
+                                .onSubmit { unlock() }
+                                .focused($focusedField, equals: .password)
+                                .accessibilityLabel("Master password")
+
+                            if vault.biometricUnlockEnabled, vault.isBiometricAvailable {
+                                Button {
+                                    unlockWithBiometrics()
+                                } label: {
+                                    Image(systemName: "touchid")
+                                        .font(.title2)
+                                }
+                                .buttonStyle(.borderless)
+                                .disabled(isBusy)
+                                .help("Unlock with Touch ID")
+                                .accessibilityLabel("Unlock with Touch ID")
+                            }
+                        }
                     }
 
                     Toggle("Use recovery phrase", isOn: $useRecovery)
                         .font(.callout)
                         .toggleStyle(.checkbox)
                 }
-                .frame(maxWidth: 280)
+                .frame(maxWidth: 300)
 
-                VStack(spacing: 8) {
-                    Button {
-                        unlock()
-                    } label: {
-                        Text("Unlock")
-                            .frame(maxWidth: 200)
-                    }
-                    .controlSize(.large)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isBusy || (useRecovery ? mnemonic.isEmpty : password.isEmpty))
-                    .accessibilityLabel("Unlock vault")
-
-                    if !useRecovery, vault.biometricUnlockEnabled, vault.isBiometricAvailable {
-                        Button {
-                            unlockWithBiometrics()
-                        } label: {
-                            Label("Unlock with Touch ID", systemImage: "touchid")
-                                .frame(maxWidth: 200)
-                        }
-                        .controlSize(.large)
-                        .disabled(isBusy)
-                        .accessibilityLabel("Unlock with Touch ID")
-                    }
+                Button {
+                    unlock()
+                } label: {
+                    Text("Unlock")
+                        .frame(maxWidth: 200)
                 }
+                .controlSize(.large)
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+                .disabled(isBusy || (useRecovery ? mnemonic.isEmpty : password.isEmpty))
+                .accessibilityLabel("Unlock vault")
             }
+            .offset(x: shakeOffset)
 
             Spacer()
 
@@ -91,8 +97,9 @@ struct UnlockVaultView: View {
             .padding(.bottom, 16)
             .accessibilityLabel("Close vault")
         }
-        .frame(minWidth: 480, minHeight: 360)
+        .frame(minWidth: 560, minHeight: 420)
         .onAppear {
+            iconAppeared = true
             focusedField = useRecovery ? .mnemonic : .password
         }
         .onChange(of: useRecovery) { _, newValue in
@@ -112,6 +119,22 @@ struct UnlockVaultView: View {
         }
     }
 
+    private func shake() {
+        withAnimation(.spring(response: 0.1, dampingFraction: 0.3)) {
+            shakeOffset = 10
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring(response: 0.1, dampingFraction: 0.3)) {
+                shakeOffset = -8
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            withAnimation(.spring(response: 0.15, dampingFraction: 0.5)) {
+                shakeOffset = 0
+            }
+        }
+    }
+
     private func unlock() {
         isBusy = true
         vault.lastError = nil
@@ -127,6 +150,7 @@ struct UnlockVaultView: View {
             } catch {
                 errorMessage = error.localizedDescription
                 showError = true
+                shake()
             }
         }
     }

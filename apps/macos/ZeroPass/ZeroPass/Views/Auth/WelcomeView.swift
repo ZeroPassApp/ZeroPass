@@ -6,15 +6,18 @@ struct WelcomeView: View {
 
     @State private var showingCreate = false
     @State private var showingOpen = false
+    @State private var iconAppeared = false
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
 
-            VStack(spacing: 20) {
+            VStack(spacing: 24) {
                 Image(systemName: "lock.shield.fill")
                     .font(.system(size: 64))
                     .foregroundStyle(.tint)
+                    .symbolEffect(.appear, isActive: iconAppeared)
+                    .accessibilityHidden(true)
 
                 VStack(spacing: 6) {
                     Text("ZeroPass")
@@ -31,18 +34,20 @@ struct WelcomeView: View {
                         showingCreate = true
                     } label: {
                         Label("Create New Vault", systemImage: "plus.circle")
-                            .frame(maxWidth: 220)
+                            .frame(maxWidth: 240)
                     }
                     .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
                     .keyboardShortcut("n", modifiers: [.command])
 
                     Button {
                         showingOpen = true
                     } label: {
                         Label("Open Existing Vault", systemImage: "folder")
-                            .frame(maxWidth: 220)
+                            .frame(maxWidth: 240)
                     }
                     .controlSize(.large)
+                    .buttonStyle(.bordered)
                     .keyboardShortcut("o", modifiers: [.command])
                 }
             }
@@ -59,10 +64,13 @@ struct WelcomeView: View {
 
             Text("Version \(versionString)")
                 .font(.caption)
-                .foregroundStyle(.quaternary)
-                .padding(.bottom, 12)
+                .foregroundStyle(.tertiary)
+                .padding(.bottom, 16)
         }
-        .frame(minWidth: 480, minHeight: 360)
+        .frame(minWidth: 560, minHeight: 420)
+        .onAppear {
+            iconAppeared = true
+        }
         .sheet(isPresented: $showingCreate) {
             CreateVaultView()
                 .environmentObject(vault)

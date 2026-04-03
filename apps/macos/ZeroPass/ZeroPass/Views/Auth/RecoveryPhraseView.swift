@@ -5,6 +5,7 @@ struct RecoveryPhraseView: View {
     let mnemonic: String
 
     @State private var copied = false
+    @State private var appeared = false
 
     private var words: [String] {
         mnemonic.split(separator: " ").map(String.init)
@@ -20,6 +21,7 @@ struct RecoveryPhraseView: View {
                 Image(systemName: "key.horizontal.fill")
                     .font(.system(size: 40))
                     .foregroundStyle(.orange)
+                    .symbolEffect(.appear, isActive: appeared)
 
                 VStack(spacing: 6) {
                     Text("Recovery Phrase")
@@ -72,6 +74,7 @@ struct RecoveryPhraseView: View {
                         Text("I Saved My Recovery Phrase")
                     }
                     .controlSize(.large)
+                    .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
                 }
             }
@@ -81,5 +84,8 @@ struct RecoveryPhraseView: View {
         }
         .padding(24)
         .frame(minWidth: 580, minHeight: 420)
+        .onAppear {
+            appeared = true
+        }
     }
 }

@@ -130,7 +130,7 @@ enum ZPBridge {
         let passphrase: String
     }
 
-    private static func dataFromResult(_ result: ZPResult) throws -> Data {
+    private nonisolated static func dataFromResult(_ result: ZPResult) throws -> Data {
         let r = result
         defer { ZPFreeResult(r) }
 
@@ -148,18 +148,18 @@ enum ZPBridge {
         return Data(s.utf8)
     }
 
-    private static func decode<T: Decodable>(_ type: T.Type, from result: ZPResult) throws -> T {
+    private nonisolated static func decode<T: Decodable>(_ type: T.Type, from result: ZPResult) throws -> T {
         let data = try dataFromResult(result)
         return try ZPJSON.decoder.decode(T.self, from: data)
     }
 
-    private static func withMutableCString<T>(_ s: String, _ body: (UnsafeMutablePointer<CChar>) -> T) -> T {
+    private nonisolated static func withMutableCString<T>(_ s: String, _ body: (UnsafeMutablePointer<CChar>) -> T) -> T {
         s.withCString { c in
             body(UnsafeMutablePointer(mutating: c))
         }
     }
 
-    static func createVault(path: String, masterPassword: String) throws -> CreateVaultResponse {
+    nonisolated static func createVault(path: String, masterPassword: String) throws -> CreateVaultResponse {
         let res: ZPResult = withMutableCString(path) { p in
             withMutableCString(masterPassword) { pw in
                 ZPCreateVault(p, pw)
@@ -168,54 +168,54 @@ enum ZPBridge {
         return try decode(CreateVaultResponse.self, from: res)
     }
 
-    static func openVault(path: String) throws -> Handle {
+    nonisolated static func openVault(path: String) throws -> Handle {
         let res: ZPResult = withMutableCString(path) { p in
             ZPOpenVault(p)
         }
         return try decode(OpenVaultResponse.self, from: res).handle
     }
 
-    static func unlock(handle: Handle, masterPassword: String) throws {
+    nonisolated static func unlock(handle: Handle, masterPassword: String) throws {
         let res: ZPResult = withMutableCString(masterPassword) { pw in
             ZPUnlock(handle, pw)
         }
         _ = try dataFromResult(res)
     }
 
-    static func unlockWithRecovery(handle: Handle, mnemonic: String) throws -> String {
+    nonisolated static func unlockWithRecovery(handle: Handle, mnemonic: String) throws -> String {
         let res: ZPResult = withMutableCString(mnemonic) { m in
             ZPUnlockWithRecovery(handle, m)
         }
         return try decode(UnlockWithRecoveryResponse.self, from: res).newMnemonic
     }
 
-    static func unlockWithKey(handle: Handle, vaultKeyBase64: String) throws {
+    nonisolated static func unlockWithKey(handle: Handle, vaultKeyBase64: String) throws {
         let res: ZPResult = withMutableCString(vaultKeyBase64) { k in
             ZPUnlockWithKey(handle, k)
         }
         _ = try dataFromResult(res)
     }
 
-    static func getVaultKeyBase64(handle: Handle) throws -> String {
+    nonisolated static func getVaultKeyBase64(handle: Handle) throws -> String {
         let res: ZPResult = ZPGetVaultKey(handle)
         return try decode(VaultKeyResponse.self, from: res).vaultKeyBase64
     }
 
-    static func lock(handle: Handle) throws {
+    nonisolated static func lock(handle: Handle) throws {
         let res: ZPResult = ZPLock(handle)
         _ = try dataFromResult(res)
     }
 
-    static func close(handle: Handle) throws {
+    nonisolated static func close(handle: Handle) throws {
         let res: ZPResult = ZPCloseVault(handle)
         _ = try dataFromResult(res)
     }
 
-    static func isLocked(handle: Handle) -> Bool {
+    nonisolated static func isLocked(handle: Handle) -> Bool {
         ZPIsLocked(handle) != 0
     }
 
-    static func listItems(handle: Handle, filter: ItemFilter? = nil) throws -> [VaultItem] {
+    nonisolated static func listItems(handle: Handle, filter: ItemFilter? = nil) throws -> [VaultItem] {
         let filterJSON: String
         if let filter {
             let d = try ZPJSON.encoder.encode(filter)
@@ -241,14 +241,14 @@ enum ZPBridge {
         return try ZPJSON.decoder.decode([VaultItem].self, from: data)
     }
 
-    static func getItem(handle: Handle, id: String) throws -> VaultItem {
+    nonisolated static func getItem(handle: Handle, id: String) throws -> VaultItem {
         let res: ZPResult = withMutableCString(id) { c in
             ZPGetItem(handle, c)
         }
         return try decode(VaultItem.self, from: res)
     }
 
-    static func createItem(handle: Handle, item: VaultItem) throws -> VaultItem {
+    nonisolated static func createItem(handle: Handle, item: VaultItem) throws -> VaultItem {
         let d = try ZPJSON.encoder.encode(item)
         let json = String(decoding: d, as: UTF8.self)
 
@@ -258,7 +258,7 @@ enum ZPBridge {
         return try decode(VaultItem.self, from: res)
     }
 
-    static func updateItem(handle: Handle, id: String, item: VaultItem) throws -> VaultItem {
+    nonisolated static func updateItem(handle: Handle, id: String, item: VaultItem) throws -> VaultItem {
         let d = try ZPJSON.encoder.encode(item)
         let json = String(decoding: d, as: UTF8.self)
 
@@ -270,35 +270,35 @@ enum ZPBridge {
         return try decode(VaultItem.self, from: res)
     }
 
-    static func deleteItem(handle: Handle, id: String) throws {
+    nonisolated static func deleteItem(handle: Handle, id: String) throws {
         let res: ZPResult = withMutableCString(id) { iid in
             ZPDeleteItem(handle, iid)
         }
         _ = try dataFromResult(res)
     }
 
-    static func searchIDs(handle: Handle, query: String) throws -> [String] {
+    nonisolated static func searchIDs(handle: Handle, query: String) throws -> [String] {
         let res: ZPResult = withMutableCString(query) { q in
             ZPSearch(handle, q)
         }
         return try decode([String].self, from: res)
     }
 
-    static func versionHistory(handle: Handle, id: String) throws -> [ItemVersion] {
+    nonisolated static func versionHistory(handle: Handle, id: String) throws -> [ItemVersion] {
         let res: ZPResult = withMutableCString(id) { iid in
             ZPGetVersionHistory(handle, iid)
         }
         return try decode([ItemVersion].self, from: res)
     }
 
-    static func restoreVersion(handle: Handle, id: String, version: Int32) throws -> VaultItem {
+    nonisolated static func restoreVersion(handle: Handle, id: String, version: Int32) throws -> VaultItem {
         let res: ZPResult = withMutableCString(id) { iid in
             ZPRestoreVersion(handle, iid, version)
         }
         return try decode(VaultItem.self, from: res)
     }
 
-    static func changeMasterPassword(handle: Handle, old: String, new: String) throws {
+    nonisolated static func changeMasterPassword(handle: Handle, old: String, new: String) throws {
         let res: ZPResult = withMutableCString(old) { o in
             withMutableCString(new) { n in
                 ZPChangeMasterPassword(handle, o, n)
@@ -307,26 +307,26 @@ enum ZPBridge {
         _ = try dataFromResult(res)
     }
 
-    static func regenerateRecovery(handle: Handle) throws -> String {
+    nonisolated static func regenerateRecovery(handle: Handle) throws -> String {
         let res: ZPResult = ZPRegenerateRecovery(handle)
         return try decode(RegenerateRecoveryResponse.self, from: res).mnemonic
     }
 
-    static func exportJSON(handle: Handle, path: String) throws {
+    nonisolated static func exportJSON(handle: Handle, path: String) throws {
         let res: ZPResult = withMutableCString(path) { p in
             ZPExportJSON(handle, p)
         }
         _ = try dataFromResult(res)
     }
 
-    static func exportEncrypted(handle: Handle, path: String) throws {
+    nonisolated static func exportEncrypted(handle: Handle, path: String) throws {
         let res: ZPResult = withMutableCString(path) { p in
             ZPExportEncrypted(handle, p)
         }
         _ = try dataFromResult(res)
     }
 
-    static func exportCSV(handle: Handle, path: String) throws {
+    nonisolated static func exportCSV(handle: Handle, path: String) throws {
         let res: ZPResult = withMutableCString(path) { p in
             ZPExportCSV(handle, p)
         }
@@ -334,7 +334,7 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func importCSV(handle: Handle, path: String) throws -> Int {
+    nonisolated static func importCSV(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImportCSV(handle, p)
         }
@@ -342,7 +342,7 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func importChrome(handle: Handle, path: String) throws -> Int {
+    nonisolated static func importChrome(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImportChrome(handle, p)
         }
@@ -350,7 +350,7 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func importFirefox(handle: Handle, path: String) throws -> Int {
+    nonisolated static func importFirefox(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImportFirefox(handle, p)
         }
@@ -358,7 +358,7 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func importSafari(handle: Handle, path: String) throws -> Int {
+    nonisolated static func importSafari(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImportSafari(handle, p)
         }
@@ -366,7 +366,7 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func import1Password(handle: Handle, path: String) throws -> Int {
+    nonisolated static func import1Password(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImport1Password(handle, p)
         }
@@ -374,7 +374,7 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func import1PUX(handle: Handle, path: String) throws -> Int {
+    nonisolated static func import1PUX(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImport1PUX(handle, p)
         }
@@ -382,7 +382,7 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func importBitwarden(handle: Handle, path: String) throws -> Int {
+    nonisolated static func importBitwarden(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImportBitwarden(handle, p)
         }
@@ -390,7 +390,7 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func importLastPass(handle: Handle, path: String) throws -> Int {
+    nonisolated static func importLastPass(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImportLastPass(handle, p)
         }
@@ -398,14 +398,14 @@ enum ZPBridge {
     }
 
     @discardableResult
-    static func importKeePass(handle: Handle, path: String) throws -> Int {
+    nonisolated static func importKeePass(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImportKeePass(handle, p)
         }
         return try decode(ImportResponse.self, from: res).imported
     }
 
-    static func syncSetup(handle: Handle, config: SyncConfig) throws {
+    nonisolated static func syncSetup(handle: Handle, config: SyncConfig) throws {
         let d = try ZPJSON.encoder.encode(config)
         let json = String(decoding: d, as: UTF8.self)
 
@@ -415,26 +415,26 @@ enum ZPBridge {
         _ = try dataFromResult(res)
     }
 
-    static func syncRegister(handle: Handle, deviceName: String) throws {
+    nonisolated static func syncRegister(handle: Handle, deviceName: String) throws {
         let res: ZPResult = withMutableCString(deviceName) { name in
             ZPSyncRegister(handle, name)
         }
         _ = try dataFromResult(res)
     }
 
-    static func syncFull(handle: Handle) throws -> SyncFullResponse {
+    nonisolated static func syncFull(handle: Handle) throws -> SyncFullResponse {
         let res: ZPResult = ZPSyncFull(handle)
         return try decode(SyncFullResponse.self, from: res)
     }
 
-    static func scorePassword(_ password: String) throws -> PasswordScore {
+    nonisolated static func scorePassword(_ password: String) throws -> PasswordScore {
         let res: ZPResult = withMutableCString(password) { pw in
             ZPScorePassword(pw)
         }
         return try decode(PasswordScore.self, from: res)
     }
 
-    static func generatePassword(length: Int, options: GeneratePasswordOptions? = nil) throws -> String {
+    nonisolated static func generatePassword(length: Int, options: GeneratePasswordOptions? = nil) throws -> String {
         let optJSON: String
         if let options {
             let d = try ZPJSON.encoder.encode(options)
@@ -454,7 +454,7 @@ enum ZPBridge {
         return try decode(GeneratedPassword.self, from: res).password
     }
 
-    static func generatePassphrase(words: Int, separator: String = "-") throws -> String {
+    nonisolated static func generatePassphrase(words: Int, separator: String = "-") throws -> String {
         let res: ZPResult = withMutableCString(separator) { sep in
             ZPGeneratePassphrase(Int32(words), sep)
         }

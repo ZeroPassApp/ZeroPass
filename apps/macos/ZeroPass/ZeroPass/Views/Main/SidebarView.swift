@@ -20,6 +20,7 @@ struct SidebarView: View {
                     .accessibilityLabel("All Items, \(vault.items.count) items")
 
                 Label("Favorites", systemImage: "star.fill")
+                    .foregroundStyle(.yellow, .primary)
                     .badge(vault.favoriteCount)
                     .tag(SidebarCategory.favorites)
                     .accessibilityLabel("Favorites, \(vault.favoriteCount) items")

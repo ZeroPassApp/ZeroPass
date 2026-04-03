@@ -13,6 +13,7 @@ struct ItemDetailView: View {
     @State private var showCopiedToast = false
     @State private var copiedFieldName = ""
     @State private var showDeleteConfirmation = false
+    @State private var copiedFieldKey: String?
 
     private var sensitiveKeys: Set<String> {
         item.type.sensitiveFieldKeys
@@ -176,13 +177,14 @@ struct ItemDetailView: View {
     private func fieldRow(key: String, value: String) -> some View {
         let isSensitive = sensitiveKeys.contains(key)
         let isRevealed = revealedFields.contains(key)
+        let isCopied = copiedFieldKey == key
 
         LabeledContent(key.replacingOccurrences(of: "_", with: " ").capitalized) {
             HStack(spacing: 6) {
                 if isSensitive && !isRevealed {
-                    Text("••••••••••••")
+                    Text("●●●●●●●●●●●●")
                         .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.tertiary)
                         .accessibilityLabel("\(key), hidden")
                 } else {
                     Text(value)
@@ -211,11 +213,13 @@ struct ItemDetailView: View {
                 Button {
                     copyField(key: key, value: value)
                 } label: {
-                    Image(systemName: "doc.on.doc")
+                    Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
+                        .foregroundStyle(isCopied ? .green : .secondary)
                 }
                 .buttonStyle(.borderless)
                 .help("Copy \(key)")
                 .accessibilityLabel("Copy \(key)")
+                .animation(.easeInOut(duration: 0.2), value: isCopied)
             }
         }
     }
@@ -224,8 +228,17 @@ struct ItemDetailView: View {
         let secs = vault.clipboardAutoClearEnabled ? vault.clipboardAutoClearSeconds : 0
         ClipboardService.shared.copySensitive(value, clearAfterSeconds: secs)
         copiedFieldName = key.replacingOccurrences(of: "_", with: " ")
+
         withAnimation {
+            copiedFieldKey = key
             showCopiedToast = true
+        }
+
+        Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            withAnimation {
+                copiedFieldKey = nil
+            }
         }
     }
 

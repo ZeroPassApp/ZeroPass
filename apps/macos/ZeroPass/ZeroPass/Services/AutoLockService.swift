@@ -53,16 +53,20 @@ final class AutoLockService {
         let nc = NSWorkspace.shared.notificationCenter
         observers.append(
             nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                guard let self, self.lockOnSleep, self.isVaultUnlocked else { return }
-                self.onLock?()
-                NotificationService.shared.notify(title: "ZeroPass", body: "Vault locked (sleep)")
+                Task { @MainActor in
+                    guard let self, self.lockOnSleep, self.isVaultUnlocked else { return }
+                    self.onLock?()
+                    NotificationService.shared.notify(title: "ZeroPass", body: "Vault locked (sleep)")
+                }
             }
         )
         observers.append(
             nc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                guard let self, self.lockOnScreenSleep, self.isVaultUnlocked else { return }
-                self.onLock?()
-                NotificationService.shared.notify(title: "ZeroPass", body: "Vault locked (screen sleep)")
+                Task { @MainActor in
+                    guard let self, self.lockOnScreenSleep, self.isVaultUnlocked else { return }
+                    self.onLock?()
+                    NotificationService.shared.notify(title: "ZeroPass", body: "Vault locked (screen sleep)")
+                }
             }
         )
     }

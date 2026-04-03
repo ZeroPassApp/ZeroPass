@@ -11,6 +11,7 @@ struct CreateVaultView: View {
 
     @State private var isBusy = false
     @State private var strength: String = ""
+    @State private var strengthScore: Int = 0
 
     private enum Field { case password, confirm }
     @FocusState private var focusedField: Field?
@@ -39,18 +40,42 @@ struct CreateVaultView: View {
                 .focused($focusedField, equals: .password)
                 .accessibilityLabel("Master password")
                 .onChange(of: password) { _, newValue in
-                    Task { strength = await vault.scorePasswordSummary(newValue) }
+                    Task {
+                        if newValue.isEmpty {
+                            strength = ""
+                            strengthScore = 0
+                        } else {
+                            do {
+                                let score = try await vault.scorePassword(newValue)
+                                strength = "Score \(score.score)/4 — \(score.feedback)"
+                                strengthScore = score.score
+                            } catch {
+                                strength = ""
+                                strengthScore = 0
+                            }
+                        }
+                    }
                 }
 
             SecureField("Confirm Password", text: $confirm)
                 .focused($focusedField, equals: .confirm)
                 .accessibilityLabel("Confirm password")
 
-            if !strength.isEmpty {
-                Text(strength)
+            if !password.isEmpty {
+                PasswordStrengthBar(score: strengthScore)
+                    .accessibilityLabel("Password strength: \(strengthLabel)")
+
+                if !strength.isEmpty {
+                    Text(strength)
+                        .font(.caption)
+                        .foregroundStyle(strengthColor)
+                }
+            }
+
+            if !confirm.isEmpty && password != confirm {
+                Text("Passwords do not match")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityLabel("Password strength: \(strength)")
+                    .foregroundStyle(.red)
             }
 
             if let err = vault.lastError {
@@ -67,14 +92,35 @@ struct CreateVaultView: View {
                 Spacer()
 
                 Button("Create") { create() }
+                    .buttonStyle(.borderedProminent)
                     .disabled(isBusy || folderURL == nil || password.isEmpty || password != confirm)
                     .keyboardShortcut(.defaultAction)
                     .accessibilityLabel("Create vault")
             }
         }
-        .padding(20)
+        .padding(24)
         .frame(width: 560)
         .onAppear { focusedField = .password }
+    }
+
+    private var strengthLabel: String {
+        switch strengthScore {
+        case 0: return "Very weak"
+        case 1: return "Weak"
+        case 2: return "Fair"
+        case 3: return "Strong"
+        default: return "Very strong"
+        }
+    }
+
+    private var strengthColor: Color {
+        switch strengthScore {
+        case 0: return .red
+        case 1: return .orange
+        case 2: return .yellow
+        case 3: return .green
+        default: return .teal
+        }
     }
 
     private func chooseFolder() {

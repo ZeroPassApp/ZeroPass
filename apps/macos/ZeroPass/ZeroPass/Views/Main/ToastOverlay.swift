@@ -11,16 +11,16 @@ struct ToastOverlay: ViewModifier {
             if isShowing {
                 HStack(spacing: 6) {
                     Image(systemName: icon)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.green)
                     Text(message)
                         .font(.system(size: 12, weight: .medium))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(.regularMaterial)
-                .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
-                .padding(.bottom, 16)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial, in: Capsule())
+                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                .padding(.bottom, 20)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .onAppear {
                     dismissTask?.cancel()
