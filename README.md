@@ -8,7 +8,7 @@
 
 ## Features
 
-- **CLI-first** — `zeropass` CLI is the primary interface
+- **CLI-first** — `zp` CLI is the primary interface
 - **Offline-first** — full functionality without internet
 - **Zero-knowledge** — all encryption client-side, server never sees plaintext
 - **Dev secrets native** — API keys, SSH keys, `.env` injection
@@ -18,24 +18,24 @@
 
 ```bash
 # Build
-go build -o zeropass ./packages/cli/
+go build -o zp ./packages/cli/
 
 # Initialize a new vault
-./zeropass init
+./zp init
 
 # Add credentials
-./zeropass add --type=login --name="GitHub" --username="user" --generate-password
-./zeropass add --type=apikey --name="AWS Prod" --key="AKIA..."
+./zp add --type=login --name="GitHub" --username="user" --generate-password
+./zp add --type=apikey --name="AWS Prod" --key="AKIA..."
 
 # Search & retrieve
-./zeropass search "github"
-./zeropass get "GitHub" --copy
+./zp search "github"
+./zp get "GitHub" --copy
 
 # Inject secrets into dev workflow
-./zeropass run --env-file=.env -- npm start
+./zp run --env-file=.env -- npm start
 
 # Password health check
-./zeropass health
+./zp health
 ```
 
 ## Architecture
@@ -47,7 +47,7 @@ zeropass/
 │   ├── vault/           # CRUD, search, versioning, health, import/export
 │   └── sync/            # Delta sync client/server, conflict resolution
 ├── packages/
-│   └── cli/             # `zeropass` CLI (cobra-based)
+│   └── cli/             # `zp` CLI (cobra-based)
 └── services/
     └── syncserver/      # Self-hosted sync server
 ```
@@ -86,7 +86,7 @@ zeropass/
 | `recovery` | Recovery key management |
 | `import` | Import from Chrome, Firefox, 1Password, Bitwarden |
 | `export` | Export vault (JSON, CSV, encrypted) |
-| `run` | Inject secrets via `.env` file (`zp://` references) |
+| `run` | Inject secrets via `.env` file (`zp://item-name/field-name` references) |
 | `env` | Environment management (dev/staging/prod) |
 
 ## Sync Server
@@ -96,6 +96,12 @@ zeropass/
 go build -o syncserver ./services/syncserver/
 ./syncserver --port=8443 --api-key=your-secret-key
 ```
+
+Current status: the sync server is implemented and tested at the package level, but should still be treated as a self-hosted preview until deployment hardening and broader integration testing are complete. The current server acceptance logic is timestamp-first; version metadata is preserved in the protocol and used by clients for reconciliation.
+
+Verified preview path: SQLite storage + restart persistence, with bearer-auth smoke-tested in both binary and Docker modes via `bash services/syncserver/smoke-test.sh both`; auth-off preview mode is covered by `go test ./services/syncserver/...`.
+
+Advanced backends such as PostgreSQL and blob storage are available in the codebase, but should still be treated as advanced preview paths until broader operator validation is in place.
 
 ## Development
 
@@ -108,7 +114,10 @@ go test -coverprofile=coverage.out ./...
 go tool cover -html=coverage.out
 
 # Build CLI
-go build -o zeropass ./packages/cli/
+go build -o zp ./packages/cli/
+
+# Run the sync preview smoke test (binary + Docker)
+bash services/syncserver/smoke-test.sh both
 ```
 
 ### macOS app (SwiftUI)

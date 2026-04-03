@@ -381,7 +381,7 @@ func TestIntegration_PrintFunctions(t *testing.T) {
 	assert.Contains(t, output, "Full Test Item")
 	assert.Contains(t, output, "login")
 	assert.Contains(t, output, "testuser")
-	assert.Contains(t, output, "********")     // password hidden
+	assert.Contains(t, output, "********")      // password hidden
 	assert.NotContains(t, output, "secretpass") // password not shown
 	assert.Contains(t, output, "https://test.com")
 	assert.Contains(t, output, "extra_value")
@@ -511,7 +511,7 @@ func TestIntegration_ZPReferenceResolution(t *testing.T) {
 	// Create .env file with zp:// references
 	dir := t.TempDir()
 	envPath := filepath.Join(dir, ".env")
-	envContent := fmt.Sprintf(`# Database
+	envContent := `# Database
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=zp://production-db/username
@@ -529,7 +529,7 @@ AWS_ACCESS_KEY=zp://deploy-config/aws_access_key
 # Literals
 NODE_ENV=production
 PORT=3000
-`)
+`
 	require.NoError(t, os.WriteFile(envPath, []byte(envContent), 0600))
 
 	// Parse
@@ -651,8 +651,8 @@ func TestIntegration_ExportCSVFormat(t *testing.T) {
 			},
 		},
 		{
-			Name: "CSV Test Note",
-			Type: types.ItemTypeSecureNote,
+			Name:  "CSV Test Note",
+			Type:  types.ItemTypeSecureNote,
 			Notes: "A note with, commas and \"quotes\"",
 		},
 	}

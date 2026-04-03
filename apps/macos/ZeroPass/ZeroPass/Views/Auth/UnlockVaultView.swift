@@ -2,124 +2,201 @@ import SwiftUI
 
 struct UnlockVaultView: View {
     @EnvironmentObject var vault: VaultClient
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var password: String = ""
     @State private var mnemonic: String = ""
-    @State private var useRecovery = false
+    @State private var selectedMethod: UnlockMethod = .password
+    @State private var showPassword = false
     @State private var isBusy = false
-    @State private var showError = false
-    @State private var errorMessage = ""
-    @State private var iconAppeared = false
+    @State private var errorMessage: String?
     @State private var shakeOffset: CGFloat = 0
+    @State private var showErrorHighlight = false
+    @State private var capsLockOn = false
+    @State private var showCloseConfirmation = false
+    @State private var showOpenVaultSheet = false
 
-    private enum Field { case password, mnemonic }
-    @FocusState private var focusedField: Field?
+    private enum UnlockMethod: String, CaseIterable, Identifiable {
+        case password = "Password"
+        case recoveryPhrase = "Recovery Phrase"
+
+        var id: String { rawValue }
+    }
+
 
     var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-
-            VStack(spacing: 24) {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.tint)
-                    .symbolEffect(.appear, isActive: iconAppeared)
-                    .accessibilityHidden(true)
-
-                VStack(spacing: 4) {
-                    Text("Unlock Vault")
-                        .font(.title2)
-                        .bold()
-
-                    Text(vault.vaultName)
-                        .font(.subheadline)
-                        .foregroundStyle(.tertiary)
-                }
-
-                VStack(spacing: 12) {
-                    if useRecovery {
-                        TextField("Recovery phrase", text: $mnemonic)
-                            .textFieldStyle(.roundedBorder)
-                            .focused($focusedField, equals: .mnemonic)
-                            .accessibilityLabel("Recovery phrase")
-                    } else {
-                        HStack(spacing: 8) {
-                            SecureField("Master Password", text: $password)
-                                .textFieldStyle(.roundedBorder)
-                                .onSubmit { unlock() }
-                                .focused($focusedField, equals: .password)
-                                .accessibilityLabel("Master password")
-
-                            if vault.biometricUnlockEnabled, vault.isBiometricAvailable {
-                                Button {
-                                    unlockWithBiometrics()
-                                } label: {
-                                    Image(systemName: "touchid")
-                                        .font(.title2)
-                                }
-                                .buttonStyle(.borderless)
-                                .disabled(isBusy)
-                                .help("Unlock with Touch ID")
-                                .accessibilityLabel("Unlock with Touch ID")
-                            }
-                        }
+        AuthSceneScaffold(
+            title: "Unlock Vault",
+            subtitle: vaultSubtitle,
+            detail: vaultDetail,
+            detailSymbolName: vaultDetail == nil ? nil : "folder",
+            symbolName: "lock.shield.fill",
+            accessory: {
+                vaultMenu
+            }
+        ) {
+            VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+                Picker("Unlock method", selection: $selectedMethod) {
+                    ForEach(UnlockMethod.allCases) { method in
+                        Text(method.rawValue)
+                            .tag(method)
                     }
-
-                    Toggle("Use recovery phrase", isOn: $useRecovery)
-                        .font(.callout)
-                        .toggleStyle(.checkbox)
                 }
-                .frame(maxWidth: 300)
+                .pickerStyle(.segmented)
+                .disabled(isBusy)
+                .accessibilityHint("Choose whether to unlock with your master password or recovery phrase")
+
+                Group {
+                    if selectedMethod == .password {
+                        UnlockPasswordSection(
+                            password: $password,
+                            showPassword: $showPassword,
+                            isBusy: isBusy,
+                            showErrorHighlight: showErrorHighlight,
+                            capsLockOn: capsLockOn,
+                            canUseBiometrics: canUseBiometrics,
+                            biometricHelperText: biometricHelperText,
+                            onSubmit: unlock,
+                            onUnlockWithBiometrics: unlockWithBiometrics
+                        )
+                    } else {
+                        UnlockRecoverySection(
+                            mnemonic: $mnemonic,
+                            showErrorHighlight: showErrorHighlight
+                        )
+                    }
+                }
+
+                if let errorMessage, !errorMessage.isEmpty {
+                    AuthMessageView(
+                        text: errorMessage,
+                        systemImage: "exclamationmark.triangle.fill",
+                        tone: .error
+                    )
+                }
 
                 Button {
                     unlock()
                 } label: {
-                    Text("Unlock")
-                        .frame(maxWidth: 200)
+                    HStack(spacing: ZPTheme.spacing8) {
+                        if isBusy {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(isBusy ? "Unlocking…" : "Unlock")
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .controlSize(.large)
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
-                .disabled(isBusy || (useRecovery ? mnemonic.isEmpty : password.isEmpty))
+                .disabled(isUnlockDisabled)
                 .accessibilityLabel("Unlock vault")
+
+                AuthSupportingNoteView(
+                    text: "Encrypted locally. ZeroPass never sends your master password anywhere.",
+                    systemImage: "checkmark.shield"
+                )
             }
-            .offset(x: shakeOffset)
-
-            Spacer()
-
-            Button("Close Vault") {
+        }
+        .offset(x: shakeOffset)
+        .sheet(isPresented: $showOpenVaultSheet) {
+            OpenVaultSheet(mode: .replaceCurrent)
+                .environmentObject(vault)
+        }
+        .onAppear {
+            updateCapsLock()
+            errorMessage = nil
+        }
+        .onChange(of: selectedMethod) { _, newValue in
+            errorMessage = nil
+            showErrorHighlight = false
+            capsLockOn = newValue == .password && NSEvent.modifierFlags.contains(.capsLock)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            updateCapsLock()
+        }
+        .confirmationDialog(
+            "Close Vault?",
+            isPresented: $showCloseConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Close Vault", role: .destructive) {
                 Task { await vault.closeVault() }
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .buttonStyle(.plain)
-            .disabled(isBusy)
-            .padding(.bottom, 16)
-            .accessibilityLabel("Close vault")
-        }
-        .frame(minWidth: 560, minHeight: 420)
-        .onAppear {
-            iconAppeared = true
-            focusedField = useRecovery ? .mnemonic : .password
-        }
-        .onChange(of: useRecovery) { _, newValue in
-            focusedField = newValue ? .mnemonic : .password
-        }
-        .alert("Unlock Failed", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
+            Button("Cancel", role: .cancel) {}
         } message: {
-            Text(errorMessage)
-        }
-        .onChange(of: vault.lastError) { _, newValue in
-            if let error = newValue, !error.isEmpty {
-                errorMessage = error
-                showError = true
-                vault.lastError = nil
-            }
+            Text("You can reopen this vault later from the welcome screen.")
         }
     }
 
+    private var vaultMenu: some View {
+        Menu {
+            Button("Choose Different Vault…") {
+                showOpenVaultSheet = true
+            }
+
+            Divider()
+
+            Button("Close Vault…", role: .destructive) {
+                showCloseConfirmation = true
+            }
+        } label: {
+            Label("Vault", systemImage: "ellipsis.circle")
+                .font(.callout)
+                .foregroundStyle(ZPTheme.textSecondary)
+        }
+        .disabled(isBusy)
+        .accessibilityLabel("Vault actions")
+    }
+
+    private var vaultSubtitle: String? {
+        let name = vault.vaultName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return nil }
+        return name
+    }
+
+    private var vaultDetail: String? {
+        let path = vault.vaultPathDisplay.trimmingCharacters(in: .whitespacesAndNewlines)
+        return path == "—" ? nil : path
+    }
+
+    private var canUseBiometrics: Bool {
+        vault.biometricUnlockEnabled && vault.isBiometricAvailable
+    }
+
+    private var biometricHelperText: String? {
+        guard !canUseBiometrics, vault.isBiometricAvailable else { return nil }
+        return "Touch ID is available on this Mac. Enable it in Security settings after unlocking once."
+    }
+
+    private var isUnlockDisabled: Bool {
+        if isBusy {
+            return true
+        }
+
+        switch selectedMethod {
+        case .password:
+            return password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .recoveryPhrase:
+            return RecoveryPhraseSupport.normalizedText(from: mnemonic).isEmpty
+        }
+    }
+
+    private func updateCapsLock() {
+        capsLockOn = selectedMethod == .password && NSEvent.modifierFlags.contains(.capsLock)
+    }
+
     private func shake() {
+        guard !reduceMotion else {
+            withAnimation(.easeInOut(duration: 0.3)) { showErrorHighlight = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                withAnimation(.easeInOut(duration: 0.3)) { showErrorHighlight = false }
+            }
+            return
+        }
+
+        showErrorHighlight = true
         withAnimation(.spring(response: 0.1, dampingFraction: 0.3)) {
             shakeOffset = 10
         }
@@ -133,40 +210,53 @@ struct UnlockVaultView: View {
                 shakeOffset = 0
             }
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            withAnimation(.easeInOut(duration: 0.3)) { showErrorHighlight = false }
+        }
     }
 
     private func unlock() {
         isBusy = true
+        errorMessage = nil
         vault.lastError = nil
+        showErrorHighlight = false
 
         Task {
             defer { isBusy = false }
+
             do {
-                if useRecovery {
-                    try await vault.unlockWithRecovery(mnemonic: mnemonic)
-                } else {
+                if selectedMethod == .password {
                     try await vault.unlock(masterPassword: password)
+                } else {
+                    try await vault.unlockWithRecovery(
+                        mnemonic: RecoveryPhraseSupport.normalizedText(from: mnemonic)
+                    )
                 }
             } catch {
-                errorMessage = error.localizedDescription
-                showError = true
-                shake()
+                presentError(error.localizedDescription)
             }
         }
     }
 
     private func unlockWithBiometrics() {
         isBusy = true
+        errorMessage = nil
         vault.lastError = nil
+        showErrorHighlight = false
 
         Task {
             defer { isBusy = false }
+
             do {
                 try await vault.unlockWithBiometrics()
             } catch {
-                errorMessage = error.localizedDescription
-                showError = true
+                presentError(error.localizedDescription)
             }
         }
+    }
+
+    private func presentError(_ message: String) {
+        errorMessage = message
+        shake()
     }
 }

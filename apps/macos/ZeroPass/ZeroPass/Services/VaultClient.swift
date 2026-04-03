@@ -14,6 +14,7 @@ final class VaultClient: ObservableObject {
     @Published var items: [VaultItem] = []
     @Published var selectedItemID: VaultItem.ID?
     @Published var lastError: String?
+    @Published var authFlowError: String?
 
     @Published var biometricUnlockEnabled: Bool {
         didSet {
@@ -165,11 +166,12 @@ final class VaultClient: ObservableObject {
         do {
             try await openVault(url)
         } catch {
-            lastError = error.localizedDescription
+            authFlowError = error.localizedDescription
         }
     }
 
     func createVault(_ url: URL, masterPassword: String) async throws {
+        authFlowError = nil
         try beginSecurityScopedAccess(url)
 
         let path = url.path
@@ -180,12 +182,14 @@ final class VaultClient: ObservableObject {
         vaultURL = url
         handle = resp.handle
         state = .showingRecovery(mnemonic: resp.mnemonic)
+        authFlowError = nil
 
         loadSyncConfigFromDisk()
         try? bookmarks.saveVaultURL(url)
     }
 
     func openVault(_ url: URL) async throws {
+        authFlowError = nil
         try beginSecurityScopedAccess(url)
 
         let path = url.path
@@ -198,9 +202,53 @@ final class VaultClient: ObservableObject {
         items = []
         selectedItemID = nil
         state = .locked
+        authFlowError = nil
 
         loadSyncConfigFromDisk()
         try? bookmarks.saveVaultURL(url)
+    }
+
+    func replaceVault(with url: URL) async throws {
+        if vaultURL == url, handle != nil {
+            authFlowError = nil
+            return
+        }
+
+        authFlowError = nil
+
+        guard url.startAccessingSecurityScopedResource() else {
+            throw ZPBridgeError(code: .internalError, message: "Failed to access vault folder")
+        }
+
+        do {
+            let path = url.path
+            let newHandle = try await Task.detached(priority: .userInitiated) {
+                try ZPBridge.openVault(path: path)
+            }.value
+
+            if let oldHandle = handle {
+                _ = try? await Task.detached(priority: .utility) {
+                    try ZPBridge.close(handle: oldHandle)
+                }.value
+            }
+
+            securityScopedURL?.stopAccessingSecurityScopedResource()
+            securityScopedURL = url
+            vaultURL = url
+            handle = newHandle
+            items = []
+            selectedItemID = nil
+            state = .locked
+            autoLock.setVaultUnlocked(false)
+            authFlowError = nil
+
+            resetSyncFromVault()
+            loadSyncConfigFromDisk()
+            try? bookmarks.saveVaultURL(url)
+        } catch {
+            url.stopAccessingSecurityScopedResource()
+            throw error
+        }
     }
 
     func unlock(masterPassword: String) async throws {
@@ -268,6 +316,7 @@ final class VaultClient: ObservableObject {
         selectedItemID = nil
         state = .noVault
         autoLock.setVaultUnlocked(false)
+        authFlowError = nil
 
         resetSyncFromVault()
         endSecurityScopedAccess()

@@ -88,7 +88,7 @@ func runEnvList(cmd *cobra.Command, args []string) error {
 
 	if len(envs) == 0 {
 		fmt.Println("No environments found.")
-		fmt.Println("Create one with: zeropass env create <name>")
+		fmt.Printf("Create one with: %s\n", cliUsage("env create <name>"))
 		return nil
 	}
 
@@ -116,7 +116,7 @@ func runEnvCreate(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Fprintf(cmd.ErrOrStderr(), "✓ Environment %q created.\n", envName)
 		fmt.Fprintf(cmd.ErrOrStderr(), "  Tag items with %q to add them to this environment.\n", envTagPrefix+envName)
-		fmt.Fprintf(cmd.ErrOrStderr(), "  Example: zeropass add --name myapi --type apikey --tags %s\n", envTagPrefix+envName)
+		fmt.Fprintf(cmd.ErrOrStderr(), "  Example: %s\n", cliUsage(fmt.Sprintf("add --name myapi --type apikey --tags %s", envTagPrefix+envName)))
 	}
 	return nil
 }

@@ -40,7 +40,7 @@ func init() {
 
 func runRun(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("no command specified. Usage: zeropass run -- <command> [args...]")
+		return fmt.Errorf("no command specified. Usage: %s", cliUsage("run -- <command> [args...]"))
 	}
 
 	// Parse .env file

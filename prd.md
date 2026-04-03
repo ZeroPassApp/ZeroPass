@@ -56,7 +56,7 @@ ZeroPass is a **developer-first, zero-knowledge credential manager** designed fo
 
 * **Offline-first vault** — works fully without internet
 * **Zero-knowledge encryption** — server (if used) cannot decrypt data
-* **CLI-native** — `zeropass` CLI is first-class, GUI is complementary
+* **CLI-native** — `zp` CLI is first-class, GUI is complementary
 * **Modular architecture** — pluggable crypto, storage, sync layers
 * **Developer secrets management** — native support for API keys, SSH keys, .env files, tokens
 
@@ -66,7 +66,7 @@ ZeroPass is a **developer-first, zero-knowledge credential manager** designed fo
 
 | Differentiator | ZeroPass | Others |
 |---|---|---|
-| CLI-first workflow | `zeropass run --env-file` native | CLI is afterthought |
+| CLI-first workflow | `zp run --env-file` native | CLI is afterthought |
 | Truly offline | Full functionality without internet | Require cloud for core features |
 | Dev secrets native | API keys, SSH keys, .env injection | Designed for passwords only |
 | Self-sovereign | User owns 100% data, no vendor dependency | Data on vendor servers |
@@ -116,7 +116,7 @@ ZeroPass is a **developer-first, zero-knowledge credential manager** designed fo
 | Vault unlock latency | < 300ms | Client instrumentation |
 | Search latency | < 50ms | Client instrumentation |
 | Onboarding completion rate | > 80% | Analytics: setup → first credential stored |
-| CLI daily invocations | Track per user | `zeropass` command telemetry (opt-in) |
+| CLI daily invocations | Track per user | `zp` command telemetry (opt-in) |
 | Import success rate | > 95% | Import flow analytics |
 
 ### Security Metrics
@@ -145,7 +145,7 @@ ZeroPass is a **developer-first, zero-knowledge credential manager** designed fo
 
 * Local encrypted vault (AES-256-GCM, per-item encryption)
 * Crypto engine (Argon2id KDF + AES-256-GCM)
-* CLI tool (`zeropass`) — core commands
+* CLI tool (`zp`) — core commands
 * Basic macOS app (SwiftUI vault browser)
 * Import from Chrome, Firefox, 1Password, Bitwarden (CSV)
 * Export encrypted vault backup
@@ -192,7 +192,7 @@ ZeroPass is a **developer-first, zero-knowledge credential manager** designed fo
 
 Avoid head-to-head competition with Bitwarden/1Password on consumer features. Focus on **sharp angle differentiation**:
 
-1. **CLI-native** — `zeropass` CLI is the PRIMARY interface, not an add-on
+1. **CLI-native** — `zp` CLI is the PRIMARY interface, not an add-on
 2. **Offline-first** — full functionality without internet (unlike Bitwarden/1Password)
 3. **Developer secrets** — native `.env` injection, SSH key agent, environment management
 4. **Self-sovereign** — user owns 100% of data, zero vendor dependency
@@ -220,17 +220,17 @@ Avoid head-to-head competition with Bitwarden/1Password on consumer features. Fo
    * Tag, categorize, add to favorites
 
 4. **Add Credential (CLI)**
-   * `zeropass add --type=apikey --name="AWS Prod" --value="AKIA..."`
-   * `zeropass add --type=login --name="GitHub" --generate-password`
+  * `zp add --type=apikey --name="AWS Prod" --value="AKIA..."`
+  * `zp add --type=login --name="GitHub" --generate-password`
 
 5. **Search & Retrieve**
    * GUI: Cmd+K spotlight-style search across all fields
-   * CLI: `zeropass get "github" --copy` → copies to clipboard (auto-clear 30s)
-   * CLI: `zeropass search "aws"` → lists matching items
+  * CLI: `zp get "github" --copy` → copies to clipboard (auto-clear 30s)
+  * CLI: `zp search "aws"` → lists matching items
 
 6. **Inject Secrets to Dev Workflow**
-   * `zeropass run --env-file=.env -- npm start`
-   * Replace `zp://vault/item/field` references with real values at runtime
+  * `zp run --env-file=.env -- npm start`
+  * Replace `zp://item/field` references with real values at runtime
    * Secrets exist only in memory, never written to disk
 
 7. **Recovery Flow**
@@ -261,31 +261,31 @@ Avoid head-to-head competition with Bitwarden/1Password on consumer features. Fo
 * Vault lock/unlock with configurable auto-lock timer (1/5/15/30 min)
 * Item version history (track changes)
 
-### 8.2 CLI Tool (`zeropass`)
+### 8.2 CLI Tool (`zp`)
 
 ```
-zeropass init                              # Setup new vault
-zeropass unlock                            # Unlock vault (biometric or password)
-zeropass lock                              # Lock vault
-zeropass add --type=<type> --name=<name>   # Add credential
-zeropass get <query> [--copy|--json]       # Retrieve credential
-zeropass search <query>                    # Search credentials
-zeropass list [--type=<type>] [--tag=<tag>]# List items
-zeropass edit <query>                      # Edit credential
-zeropass delete <query>                    # Delete credential
-zeropass run --env-file=<file> -- <cmd>    # Inject secrets & run command
-zeropass run --env=<environment> -- <cmd>  # Inject environment secrets
-zeropass export --format=[json|csv|encrypted]
-zeropass import --from=[1password|bitwarden|chrome|firefox|csv]
-zeropass generate [--length=32] [--no-symbols] [--passphrase]
-zeropass health                            # Password health report
-zeropass recovery                          # Show/regenerate recovery key
+zp init                              # Setup new vault
+zp unlock                            # Unlock vault (biometric or password)
+zp lock                              # Lock vault
+zp add --type=<type> --name=<name>   # Add credential
+zp get <query> [--copy|--json]       # Retrieve credential
+zp search <query>                    # Search credentials
+zp list [--type=<type>] [--tag=<tag>]# List items
+zp edit <query>                      # Edit credential
+zp delete <query>                    # Delete credential
+zp run --env-file=<file> -- <cmd>    # Inject secrets & run command
+zp run --env=<environment> -- <cmd>  # Inject environment secrets
+zp export --format=[json|csv|encrypted]
+zp import --from=[1password|bitwarden|chrome|firefox|csv]
+zp generate [--length=32] [--no-symbols] [--passphrase]
+zp health                            # Password health report
+zp recovery                          # Show/regenerate recovery key
 ```
 
 * Shell completions: zsh, bash, fish
-* Secret reference format: `zp://[vault]/[item]/[field]`
+* Secret reference format: `zp://[item]/[field]`
 * JSON output mode for scripting: `--output=json`
-* Interactive TUI mode: `zeropass` (no args)
+* Interactive TUI mode: deferred (current `zp` with no args shows help)
 
 ### 8.3 Encryption
 
@@ -385,7 +385,7 @@ zeropass/
 │   └── sync-server/        # Self-hosted sync backend (Phase 2)
 ├── packages/
 │   ├── sdk/                # ZeroPass SDK (Go library)
-│   └── cli/                # `zeropass` CLI tool
+│   └── cli/                # `zp` CLI tool
 └── docs/
     ├── security-whitepaper.md
     └── architecture.md
@@ -660,20 +660,20 @@ Response: { items: [...], server_time: 1711929600, conflicts: [...] }
 1. **"Secure way = easiest way"** — security must not add friction to dev workflow
 2. **CLI is first-class citizen** — not an afterthought or plugin
 3. **Works WITH existing tools** — integrates into shell, editor, CI/CD
-4. **Zero-configuration start** — `zeropass init` and you're running
+4. **Zero-configuration start** — `zp init` and you're running
 5. **Progressive customization** — simple defaults, power when needed
 
 ### Secret Reference Format
 
 ```
-zp://[vault-name]/[item-name]/[field-name]
+zp://[item-name]/[field-name]
 ```
 
 Examples:
 ```
-zp://default/aws-prod/access-key
-zp://work/github-token/token
-zp://default/postgres-staging/password
+zp://aws-prod/api_key
+zp://github-login/password
+zp://postgres-staging/url
 ```
 
 ### .env Integration Workflow
@@ -689,23 +689,23 @@ DATABASE_URL=postgres://user:password@localhost/db
 **After ZeroPass:**
 ```env
 # .env (SAFE - references only)
-AWS_ACCESS_KEY=zp://prod/aws-api/access-key
-AWS_SECRET_KEY=zp://prod/aws-api/secret-key
-DATABASE_URL=zp://staging/postgres/connection-string
+AWS_ACCESS_KEY=zp://aws-prod/api_key
+AWS_SECRET_KEY=zp://aws-prod/api_secret
+DATABASE_URL=zp://postgres-staging/url
 ```
 
 ```bash
 # Inject secrets at runtime (never written to disk)
-zeropass run --env-file=.env -- npm start
+zp run --env-file=.env -- npm start
 ```
 
 ### Environment Management
 
 ```bash
 # Switch between environments
-zeropass run --env=development -- npm start
-zeropass run --env=staging -- npm run test:e2e
-zeropass run --env=production -- npm run deploy
+zp run --env=development -- npm start
+zp run --env=staging -- npm run test:e2e
+zp run --env=production -- npm run deploy
 ```
 
 ### Integration Points (Roadmap)
@@ -801,7 +801,7 @@ zeropass run --env=production -- npm run deploy
 
 * [ ] crypto-engine (Argon2id + AES-256-GCM + per-item encryption)
 * [ ] vault-engine (CRUD + full-text search + versioning + item types)
-* [ ] CLI tool (`zeropass`) — init, add, get, search, list, generate, import/export
+* [ ] CLI tool (`zp`) — init, add, get, search, list, generate, import/export
 * [ ] Local encrypted storage (JSON blobs + SQLite index)
 * [ ] Recovery key system (BIP-39 mnemonic)
 * [ ] Password/passphrase generator
@@ -820,7 +820,7 @@ zeropass run --env=production -- npm run deploy
 * [ ] Passkey storage & management in vault
 * [ ] Password health dashboard (weak, reused, breached)
 * [ ] HIBP breach detection integration (opt-in)
-* [ ] `.env` runtime injection (`zeropass run`)
+* [ ] `.env` runtime injection (`zp run`)
 * [ ] Environment management (dev/staging/prod)
 
 ### Phase 3: Ecosystem (Month 7-12)
@@ -943,7 +943,7 @@ This PRD is a **living document**:
 
 1. `crypto-engine` — Argon2id KDF + AES-256-GCM + recovery key
 2. `vault-engine` — CRUD + search + versioning + item types
-3. `cli` — `zeropass` CLI tool (core commands)
+3. `cli` — `zp` CLI tool (core commands)
 4. Local storage — encrypted JSON + SQLite index
 5. macOS app — SwiftUI vault browser
 6. Import/export — Chrome, Firefox, 1Password, Bitwarden

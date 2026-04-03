@@ -4,11 +4,15 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
 
-const version = "0.1.0-alpha"
+const (
+	version        = "0.1.0-alpha"
+	cliCommandName = "zp"
+)
 
 var (
 	flagVaultPath string
@@ -17,12 +21,19 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "zeropass",
-	Short:   "ZeroPass — developer-first zero-knowledge credential manager",
-	Long:    `ZeroPass is a developer-first zero-knowledge credential manager that keeps your secrets safe with end-to-end encryption.`,
-	Version: version,
+	Use:           cliCommandName,
+	Short:         "ZeroPass — developer-first zero-knowledge credential manager",
+	Long:          `ZeroPass is a developer-first zero-knowledge credential manager that keeps your secrets safe with end-to-end encryption.`,
+	Version:       version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+}
+
+func cliUsage(parts ...string) string {
+	if len(parts) == 0 {
+		return cliCommandName
+	}
+	return cliCommandName + " " + strings.Join(parts, " ")
 }
 
 func init() {

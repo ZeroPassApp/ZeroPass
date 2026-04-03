@@ -52,13 +52,13 @@ struct SecuritySettingsView: View {
                 .disabled(!vault.hasVault)
             }
 
-            Section("Recovery Key") {
-                Button("Regenerate recovery key…") {
+            Section("Recovery Phrase") {
+                Button("Regenerate recovery phrase…") {
                     showingRecoveryConfirm = true
                 }
                 .disabled(!vault.isUnlocked)
 
-                Text("Recovery key is shown ONLY during creation or regeneration (never stored).")
+                Text("Recovery phrase is shown only during creation or regeneration and is never stored.")
                     .foregroundStyle(.secondary)
                     .font(.system(size: 12))
             }
@@ -109,7 +109,7 @@ struct SecuritySettingsView: View {
                 .environmentObject(vault)
                 .frame(width: 520)
         }
-        .alert("Regenerate Recovery Key", isPresented: $showingRecoveryConfirm) {
+        .alert("Regenerate Recovery Phrase", isPresented: $showingRecoveryConfirm) {
             Button("Cancel", role: .cancel) {}
             Button("Regenerate", role: .destructive) {
                 Task {
@@ -122,7 +122,7 @@ struct SecuritySettingsView: View {
                 }
             }
         } message: {
-            Text("This will invalidate your current recovery key. Make sure you can record the new one.")
+            Text("This will invalidate your current recovery phrase. Make sure you can record the new one.")
         }
         .sheet(isPresented: $showingRecoverySheet, onDismiss: { recoveryMnemonic = "" }) {
             RecoveryMnemonicSheet(mnemonic: $recoveryMnemonic)
@@ -230,6 +230,7 @@ private struct ChangePasswordSheet: View {
 
     @State private var isBusy = false
     @State private var errorText: String?
+    @State private var passwordStrengthTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -268,11 +269,10 @@ private struct ChangePasswordSheet: View {
             }
         }
         .padding(20)
-        .onChange(of: newPassword) { _, _ in
-            Task {
-                strengthSummary = await vault.scorePasswordSummary(newPassword)
-            }
+        .onChange(of: newPassword) { _, newValue in
+            updateStrengthSummary(for: newValue)
         }
+        .onDisappear { passwordStrengthTask?.cancel() }
     }
 
     private func changePassword() {
@@ -289,35 +289,58 @@ private struct ChangePasswordSheet: View {
             }
         }
     }
+
+    private func updateStrengthSummary(for newValue: String) {
+        passwordStrengthTask?.cancel()
+
+        guard !newValue.isEmpty else {
+            strengthSummary = ""
+            return
+        }
+
+        let candidate = newValue
+        passwordStrengthTask = Task {
+            let summary = await vault.scorePasswordSummary(candidate)
+            guard !Task.isCancelled, newPassword == candidate else { return }
+            strengthSummary = summary
+        }
+    }
 }
 
 private struct RecoveryMnemonicSheet: View {
+    @EnvironmentObject var vault: VaultClient
     @Binding var mnemonic: String
     @Environment(\.dismiss) private var dismiss
 
     @State private var confirmed = false
+    @State private var copied = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("New Recovery Key")
+        VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+            Text("New Recovery Phrase")
                 .font(.title2)
-                .bold()
+                .fontWeight(.semibold)
 
-            Text("Write this down. It will not be shown again.")
+            Text("Write this down before closing this window. It will not be shown again.")
                 .foregroundStyle(.secondary)
 
-            Text(mnemonic)
-                .font(.system(.body, design: .monospaced))
-                .textSelection(.enabled)
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            RecoveryPhraseCardView(mnemonic: mnemonic)
 
-            Toggle("I have saved this recovery key", isOn: $confirmed)
+            Toggle("I have saved this recovery phrase", isOn: $confirmed)
 
             HStack {
+                Button {
+                    let secs = vault.clipboardAutoClearEnabled ? vault.clipboardAutoClearSeconds : 0
+                    ClipboardService.shared.copySensitive(mnemonic, clearAfterSeconds: secs)
+                    copied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copied = false }
+                } label: {
+                    Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                }
+                .buttonStyle(.bordered)
+
                 Spacer()
+
                 Button("Done") {
                     dismiss()
                 }
@@ -326,5 +349,6 @@ private struct RecoveryMnemonicSheet: View {
             }
         }
         .padding(20)
+        .frame(width: 560)
     }
 }

@@ -10,7 +10,7 @@ ZeroPass is organized into 4 development phases, each building on the previous. 
 
 **Goal:** Shippable local credential vault with full encryption engine, functional CLI, and macOS SwiftUI app.
 
-**Status:** **COMPLETE** — Core crypto and vault engine complete; all CLI commands shipped; macOS app launched; 9-source import/export operational.
+**Status:** **COMPLETE / VERIFIED** — Core crypto and vault engine complete; CLI commands shipped; macOS app launched; 9-source import/export operational; validated by `go test ./...` and macOS `xcodebuild test`.
 
 **Timeline:** Target completion: Week 10 (April 15, 2026)
 
@@ -57,6 +57,8 @@ ZeroPass is organized into 4 development phases, each building on the previous. 
 - **Phase 2+:** Multi-device sync
 - **Phase 3+:** Browser extension, web UI
 - **Phase 4+:** Mobile apps, enterprise admin
+- **Deferred:** Interactive TUI mode (`zp` with no args)
+- **Deferred:** Recovery PDF export
 
 ### Dependencies
 
@@ -81,11 +83,11 @@ None — Phase 1 is foundational and independent.
 
 ---
 
-## Phase 2: Sync Server & Multi-Device — **~40% Complete**
+## Phase 2: Sync Server & Multi-Device — **~35% Complete (Preview)**
 
-**Goal:** Enable seamless credential sync across 3+ devices with conflict resolution.
+**Goal:** Enable self-hosted credential sync across devices with predictable conflict handling.
 
-**Status:** **IN PROGRESS** — Sync protocol designed; client ~50% done; server ~30% done; integration testing not started.
+**Status:** **IN PROGRESS / PREVIEW** — Core sync client/server code exists, but deployment hardening and multi-device integration coverage are incomplete. Docs previously overstated the implementation as version-vector based; the current server uses timestamp-first admission checks, while version metadata is retained in the protocol for client-side reconciliation and future expansion.
 
 **Timeline:** Target start: Week 10, Duration: 6 weeks (by Week 20 = May 15, 2026)
 
@@ -93,21 +95,21 @@ None — Phase 1 is foundational and independent.
 
 | Milestone | Status | ETA | Owner |
 |-----------|--------|-----|-------|
-| 2.1 Sync protocol design & review | ✅ Complete | ✓ | Architecture |
+| 2.1 Sync contract review & docs alignment | ✅ Complete | ✓ | Architecture |
 | 2.2 Sync client implementation (pull/push) | ⏳ 50% | May 1 | Sync Team |
 | 2.3 Sync server REST API & handlers | ⏳ 30% | May 3 | Backend Team |
 | 2.4 Conflict resolution algorithm | ⏳ 60% | Apr 25 | Sync Team |
 | 2.5 SQLite sync storage (WAL mode) | ⏳ 40% | May 3 | Backend Team |
 | 2.6 Integration testing (multi-device) | ⏳ 0% | May 10 | QA Team |
-| 2.7 Deployment guide & Docker image | ⏳ 10% | May 12 | DevOps |
+| 2.7 Deployment guide & Docker image | ⏳ 30% | May 12 | DevOps |
 | 2.8 Documentation & examples | ⏳ 5% | May 15 | Docs Team |
 
 ### Deliverables
 
 - Sync client for multi-device coordination
 - REST API sync server
-- Delta sync protocol (timestamps + version vectors)
-- Conflict resolution (last-write-wins → tiebreak → remote authority)
+- Delta sync protocol (timestamps + integer item versions in payloads)
+- Conflict resolution (server admission is timestamp-first; clients retain version metadata for reconciliation)
 - SQLite storage with WAL mode for reliability
 - Docker image for easy deployment
 - Integration tests across 3+ devices
@@ -137,17 +139,17 @@ None — Phase 1 is foundational and independent.
 
 | Risk | Impact | Mitigation |
 |------|--------|-----------|
-| Conflicts cause data loss | 🔴 Critical | Extensive conflict resolution testing, version vectors, audit trail |
+| Conflicts cause data loss | 🔴 Critical | Extensive conflict resolution testing, timestamp-first server rules, audit trail |
 | Clock skew breaks logic | 🟠 High | Server-side timestamps (authority), fallback to logical clocks |
 | Network flakiness loses sync state | 🟠 High | Idempotent push/pull, WAL mode for crash recovery |
 
 ### Success Criteria
 
-- ✅ Zero data loss across sync operations
-- ✅ Syncs <5 seconds for typical changes
-- ✅ Conflicts automatically resolved with minimal user intervention
-- ✅ Server handles 1000+ devices concurrently
-- ✅ Integration tests pass on 3+ devices
+- Zero data loss across sync operations
+- Syncs <5 seconds for typical changes
+- Conflicts automatically resolved with minimal user intervention
+- Server handles 1000+ devices concurrently
+- Integration tests pass on 3+ devices
 
 ---
 

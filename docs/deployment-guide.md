@@ -39,11 +39,11 @@ go mod verify
 
 ```bash
 # Build for current OS/architecture
-go build -o zeropass ./packages/cli/
+go build -o zp ./packages/cli/
 
 # Verify build
-./zeropass --version
-./zeropass --help
+./zp --version
+./zp --help
 ```
 
 ### Build Sync Server
@@ -53,8 +53,7 @@ go build -o zeropass ./packages/cli/
 go build -o syncserver ./services/syncserver/
 
 # Verify build
-./syncserver --version
-./syncserver --help
+./syncserver -h
 ```
 
 ### Build macOS app (SwiftUI)
@@ -89,13 +88,13 @@ Notes:
 
 ```bash
 # Build for Linux on macOS
-GOOS=linux GOARCH=amd64 go build -o zeropass-linux ./packages/cli/
+GOOS=linux GOARCH=amd64 go build -o zp-linux ./packages/cli/
 
 # Build for Windows
-GOOS=windows GOARCH=amd64 go build -o zeropass.exe ./packages/cli/
+GOOS=windows GOARCH=amd64 go build -o zp.exe ./packages/cli/
 
 # Build for ARM (e.g., Raspberry Pi)
-GOOS=linux GOARCH=arm64 go build -o zeropass-arm64 ./packages/cli/
+GOOS=linux GOARCH=arm64 go build -o zp-arm64 ./packages/cli/
 ```
 
 ---
@@ -107,19 +106,20 @@ GOOS=linux GOARCH=arm64 go build -o zeropass-arm64 ./packages/cli/
 #### Option 1: Build from Source
 
 ```bash
-go build -o zeropass ./packages/cli/
-sudo mv zeropass /usr/local/bin/
-chmod +x /usr/local/bin/zeropass
+go build -o zp ./packages/cli/
+sudo mv zp /usr/local/bin/
+chmod +x /usr/local/bin/zp
 
 # Verify
-which zeropass
-zeropass --version
+which zp
+zp --version
 ```
 
 #### Option 2: Homebrew (Future)
 
 ```bash
-# Not yet available; coming in Phase 2
+# Not yet available; coming in Phase 2.
+# The formula may still be named `zeropass`, but it should install the `zp` binary.
 brew install zeropass
 ```
 
@@ -128,19 +128,19 @@ brew install zeropass
 #### Build and Install
 
 ```bash
-go build -o zeropass ./packages/cli/
-sudo install -D zeropass /usr/local/bin/zeropass
+go build -o zp ./packages/cli/
+sudo install -D zp /usr/local/bin/zp
 
 # Verify
-zeropass --version
+zp --version
 ```
 
 #### systemd Shell Wrapper (Optional)
 
-Create `/etc/bash_completion.d/zeropass` for CLI autocomplete:
+Create `/etc/bash_completion.d/zp` for CLI autocomplete:
 
 ```bash
-eval "$(zeropass completion bash)"
+eval "$(zp completion bash)"
 ```
 
 ### Windows
@@ -148,8 +148,8 @@ eval "$(zeropass completion bash)"
 #### PowerShell
 
 ```powershell
-go build -o zeropass.exe ./packages/cli/
-Move-Item zeropass.exe $env:USERPROFILE\AppData\Local\bin\
+go build -o zp.exe ./packages/cli/
+Move-Item zp.exe $env:USERPROFILE\AppData\Local\bin\
 
 # Add to PATH if not already set
 [Environment]::GetEnvironmentVariable("PATH", "User")
@@ -163,10 +163,10 @@ Move-Item zeropass.exe $env:USERPROFILE\AppData\Local\bin\
 
 ```bash
 # Interactive setup
-zeropass init
+zp init
 
 # Or with flags
-zeropass init --vault-path=~/.zeropass
+zp init --vault-path=~/.zeropass
 
 # Output: New vault created with recovery mnemonic printed
 ```
@@ -175,58 +175,61 @@ zeropass init --vault-path=~/.zeropass
 
 ```bash
 # Add a login credential
-zeropass add --type=login --name="GitHub"
+zp add --type=login --name="GitHub"
 
 # Generate and add with password (interactive)
-zeropass add --type=login --name="AWS Prod" --generate-password
+zp add --type=login --name="AWS Prod" --generate-password
 
 # Add API key
-zeropass add --type=apikey --name="Stripe Live" --key="sk_live_..."
+zp add --type=apikey --name="Stripe Live" --key="sk_live_..."
 
 # Retrieve credential
-zeropass get "GitHub" --copy
+zp get "GitHub" --copy
 
 # Search for credentials
-zeropass search "github"
+zp search "github"
 
 # List all items
-zeropass list
+zp list
 
 # Password health report
-zeropass health
+zp health
 
 # Export vault (--force skips plaintext warning for non-encrypted exports)
-zeropass export --format=json --file=backup.json
-zeropass export --format=json --file=backup.json --force
+zp export --format=json --file=backup.json
+zp export --format=json --file=backup.json --force
 
 # Generate password
-zeropass generate --length=32
+zp generate --length=32
 ```
 
 ### Vault Management
 
 ```bash
 # Unlock vault (required after restart)
-zeropass unlock
+zp unlock
 
 # Lock vault manually
-zeropass lock
+zp lock
 
-# View recovery mnemonic (if lost, vault is unrecoverable)
-zeropass recovery show
+# Validate a recovery mnemonic against the current vault
+zp recovery --validate "word1 word2 ..."
+
+# Regenerate recovery mnemonic (requires vault unlock)
+zp recovery --regenerate
 
 # Import from Bitwarden export
-zeropass import --from=bitwarden --file=bitwarden_export.json
+zp import --from=bitwarden --file=bitwarden_export.json
 
 # Import from other sources (safari, lastpass, keepass, 1pux, etc.)
-zeropass import --from=safari --file=safari_passwords.csv
-zeropass import --from=lastpass --file=lastpass_export.csv
-zeropass import --from=keepass --file=keepass_export.csv
-zeropass import --from=1pux --file=1password_export.1pux
+zp import --from=safari --file=safari_passwords.csv
+zp import --from=lastpass --file=lastpass_export.csv
+zp import --from=keepass --file=keepass_export.csv
+zp import --from=1pux --file=1password_export.1pux
 
 # Export to CSV (shows plaintext warning; use --force to skip)
-zeropass export --format=csv --file=passwords.csv
-zeropass export --format=csv --file=passwords.csv --force
+zp export --format=csv --file=passwords.csv
+zp export --format=csv --file=passwords.csv --force
 ```
 
 ---
@@ -243,10 +246,10 @@ go build -o syncserver ./services/syncserver/
 
 ```bash
 # Start server on port 8443
-./syncserver --port=8443 --db-path=./sync.db
+./syncserver --port=8443 --db-path=./zeropass-sync.db
 
 # With API key authentication
-./syncserver --port=8443 --db-path=./sync.db --api-key=my-secret-key-123
+./syncserver --port=8443 --db-path=./zeropass-sync.db --api-key=my-secret-key-123
 ```
 
 ### Run with systemd (Linux Production)
@@ -262,8 +265,10 @@ After=network.target
 [Service]
 Type=simple
 User=zeropass
+Group=zeropass
 WorkingDirectory=/opt/zeropass
-ExecStart=/opt/zeropass/syncserver --port=8443 --db-path=/var/lib/zeropass/sync.db --api-key=your-secret-key
+StateDirectory=zeropass
+ExecStart=/opt/zeropass/syncserver --port=8443 --db-path=/var/lib/zeropass/zeropass-sync.db --api-key=your-secret-key
 Restart=on-failure
 RestartSec=10s
 
@@ -278,13 +283,16 @@ WantedBy=multi-user.target
 EOF
 ```
 
+`StateDirectory=zeropass` keeps `/var/lib/zeropass` writable even with `ProtectSystem=strict`, so the SQLite database can be created without weakening the rest of the filesystem policy.
+
 #### 2. Setup User & Directory
 
 ```bash
 sudo useradd -r -s /bin/false zeropass
-sudo mkdir -p /var/lib/zeropass /opt/zeropass
-sudo chown -R zeropass:zeropass /var/lib/zeropass /opt/zeropass
+sudo install -d -o zeropass -g zeropass /opt/zeropass
 ```
+
+You do not need to pre-create `/var/lib/zeropass`; `systemd` creates it on service start because of `StateDirectory=zeropass`.
 
 #### 3. Copy Binary & Enable
 
@@ -301,43 +309,67 @@ sudo journalctl -u zeropass-syncserver.service -f
 
 ### Docker (Optional)
 
-```dockerfile
-# Dockerfile
-FROM golang:1.26-alpine AS builder
-WORKDIR /build
-COPY . .
-RUN go build -o syncserver ./services/syncserver/
+The repository includes a real Dockerfile at `services/syncserver/Dockerfile`.
 
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-COPY --from=builder /build/syncserver /usr/local/bin/
-EXPOSE 8443
-ENTRYPOINT ["syncserver"]
-```
+The image now runs as a dedicated non-root user (`uid=10001`, `gid=10001`) with `/var/lib/zeropass` as its writable working directory. Named Docker volumes are the recommended persistence path; for bind mounts, make sure the target directory is writable by `10001:10001`.
 
 Build and run:
 
 ```bash
-docker build -t zeropass-syncserver .
+docker build -t zeropass-syncserver -f services/syncserver/Dockerfile .
+docker volume create zeropass-sync-data
 docker run -p 8443:8443 \
-  -v /var/lib/zeropass:/data \
-  -e API_KEY=your-secret-key \
+  -v zeropass-sync-data:/var/lib/zeropass \
   zeropass-syncserver \
-  --port=8443 --db-path=/data/sync.db --api-key=$API_KEY
+  --port=8443 --db-path=/var/lib/zeropass/zeropass-sync.db --api-key=your-secret-key
+```
+
+If you prefer a bind mount instead of a named volume:
+
+```bash
+sudo mkdir -p /var/lib/zeropass
+sudo chown -R 10001:10001 /var/lib/zeropass
+docker run -p 8443:8443 \
+  -v /var/lib/zeropass:/var/lib/zeropass \
+  zeropass-syncserver \
+  --port=8443 --db-path=/var/lib/zeropass/zeropass-sync.db --api-key=your-secret-key
+```
+
+### Preview Smoke Test
+
+The repository includes a repeatable smoke-test script for the verified preview path. It checks:
+
+- health endpoint startup
+- bearer-auth enforcement
+- malformed request handling
+- device registration
+- push/pull flow
+- non-root Docker runtime configuration
+- persistence across restart
+- timestamp-first conflict response
+
+The shell script exercises the bearer-auth path. Auth-off preview mode is covered by `go test ./services/syncserver/...` via `services/syncserver/smoke_test.go`.
+
+```bash
+# Bare binary mode
+bash services/syncserver/smoke-test.sh binary
+
+# Container mode
+bash services/syncserver/smoke-test.sh docker
+
+# Run both verified paths
+bash services/syncserver/smoke-test.sh both
 ```
 
 ### Configure Client for Sync
 
-```bash
-# Set sync server URL (optional, defaults to local-only)
-zeropass config set sync-url https://your-server.com:8443
-zeropass config set sync-key your-secret-key
+The Go CLI does not currently expose first-class `sync` subcommands. Today, sync is configured through the macOS app settings and the native bridge layer, which persist vault-local `sync.json` state. Treat sync as a self-hosted preview feature until broader integration coverage is complete.
 
-# Sync with server
-zeropass sync pull
-zeropass sync push
-zeropass sync full
-```
+### Supported Operating Modes
+
+- **Verified preview path:** SQLite + restart persistence, with bearer-auth exercised by `services/syncserver/smoke-test.sh` in binary/Docker modes and auth-off preview mode covered by `go test ./services/syncserver/...`
+- **macOS integration path:** bridge-backed sync configuration persisted in vault-local `sync.json`
+- **Advanced preview paths:** PostgreSQL storage and blob-backed payload storage exist, but are not yet the primary documented operator path
 
 ---
 
@@ -383,8 +415,11 @@ go test -bench=BenchmarkArgon2id -benchmem ./core/crypto/kdf/
 ### Integration Tests
 
 ```bash
-# Run integration tests (marked with build tag)
-go test -tags=integration ./...
+# Run syncserver integration + smoke tests
+go test ./services/syncserver/...
+
+# Run the operator smoke test script
+bash services/syncserver/smoke-test.sh both
 ```
 
 ### Code Quality Checks
@@ -409,64 +444,46 @@ golangci-lint run ./...
 
 ### CLI Configuration
 
-Configuration is stored in `~/.zeropass/config.json`:
+The CLI currently uses command flags and vault-local metadata rather than a standalone user config file. The primary runtime knobs are:
 
-```json
-{
-  "vault_path": "~/.zeropass",
-  "auto_lock_minutes": 30,
-  "clipboard_clear_seconds": 30,
-  "color_output": true,
-  "sync_url": "https://sync.example.com:8443",
-  "sync_api_key": "your-bearer-token",
-  "sync_interval_seconds": 300
-}
-```
-
-### Environment Variables
-
-```bash
-# Override vault path
-export ZEROPASS_VAULT_PATH=/custom/path
-
-# Set sync server
-export ZEROPASS_SYNC_URL=https://sync.example.com:8443
-export ZEROPASS_SYNC_KEY=your-api-key
-
-# Disable color output
-export ZEROPASS_NO_COLOR=1
-
-# Set auto-lock timeout (minutes)
-export ZEROPASS_AUTO_LOCK_MINUTES=15
-```
+- `--vault-path`
+- `--output`
+- `--no-color`
 
 ### Sync Server Configuration
 
 ```bash
 # Flags (see syncserver --help)
 --port              HTTP listen port (default: 8443)
---db-path           SQLite database path (default: ./sync.db)
+--db-path           SQLite database path (default: zeropass-sync.db)
 --api-key           Bearer token for authentication (optional)
---max-devices       Max devices per user (default: 10)
---max-retries       Max sync retries (default: 3)
+--storage           Storage backend: sqlite or postgres
+--postgres-url      PostgreSQL connection string (required with --storage=postgres)
+--blob-enabled      Enable S3/MinIO blob storage
+--blob-endpoint     S3/MinIO endpoint
+--blob-bucket       S3/MinIO bucket name
+--blob-access-key   S3/MinIO access key
+--blob-secret-key   S3/MinIO secret key
 ```
+
+For release readiness, the verified deployment path is SQLite. PostgreSQL and blob flags should be treated as advanced preview options unless you validate them in your environment.
 
 ---
 
 ## Troubleshooting
 
-### Issue: "Command not found: zeropass"
+### Issue: "Command not found: zp"
 
 **Solution:**
 ```bash
 # Verify binary is in PATH
-which zeropass
+which zp
 
 # Add to PATH if needed
-export PATH="$PATH:/path/to/zeropass/binary"
+export PATH="$PATH:/path/to/zp/binary"
 
 # Or move to standard location
-sudo mv zeropass /usr/local/bin/
+sudo mv zp /usr/local/bin/
 ```
 
 ### Issue: "Vault locked" error
@@ -474,10 +491,10 @@ sudo mv zeropass /usr/local/bin/
 **Solution:**
 ```bash
 # Unlock vault
-zeropass unlock
+zp unlock
 
-# Or check if already unlocked
-zeropass status
+# Lock manually when finished
+zp lock
 ```
 
 ### Issue: "Checksum mismatch" error
@@ -487,13 +504,12 @@ zeropass status
 **Solution:**
 ```bash
 # Verify vault integrity
-zeropass health
+zp health
 
 # Check vault directory
 ls -la ~/.zeropass/
 
-# Recover from backup or sync source (Phase 2+)
-zeropass sync pull
+# Recover from backup or re-import if needed
 ```
 
 ### Issue: Import fails with "unsupported format"
@@ -505,10 +521,7 @@ file bitwarden_export.json
 
 # Check supported sources
 # Supported: chrome, firefox, safari, 1password, 1pux, bitwarden, lastpass, keepass, csv
-zeropass import --from=bitwarden --file=bitwarden_export.json
-
-# Check logs for specific error
-zeropass import ... --verbose
+zp import --from=bitwarden --file=bitwarden_export.json
 ```
 
 ### Issue: Sync server won't start
@@ -536,7 +549,7 @@ sudo journalctl -u zeropass-syncserver.service -n 50
 # Memory is freed after unlock completes
 
 # Monitor process
-top -p $(pgrep zeropass)
+top -p $(pgrep zp)
 ```
 
 ---
@@ -547,42 +560,42 @@ top -p $(pgrep zeropass)
 
 ```bash
 # Disable color for faster output redirection
-zeropass list --no-color
+zp list --no-color
 
-# Use JSON output for parsing (faster than table)
-zeropass list --output=json
-```
-
-### FTS5 Index Optimization
-
-```bash
-# Rebuild index (if search becomes slow)
-zeropass admin rebuild-index
-
-# This is automatic on vault creation/import
+# Use JSON output for parsing
+zp list --output=json
 ```
 
 ### Sync Server Optimization
 
-For large deployments:
+For larger deployments, prefer PostgreSQL over SQLite:
 
 ```bash
-# Use PostgreSQL instead of SQLite (Phase 2+)
-export ZEROPASS_DB_URL=postgresql://user:pass@host/zeropass
-
-# Enable query caching
---cache-seconds=300
-
-# Increase worker threads
---workers=8
+./syncserver --storage=postgres --postgres-url='postgresql://user:pass@host/zeropass?sslmode=disable'
 ```
+
+Treat this as an advanced preview/operator path until you have validated it locally; the default smoke-tested deployment path remains SQLite.
+
+---
+
+## Release Gates
+
+Use this checklist before tagging or packaging a release candidate:
+
+- [ ] `go test ./...`
+- [ ] `xcodebuild test -project apps/macos/ZeroPass/ZeroPass.xcodeproj -scheme ZeroPass -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""`
+- [ ] `go build -o zp ./packages/cli/`
+- [ ] `go build -o syncserver ./services/syncserver/`
+- [ ] `docker build -t zeropass-syncserver -f services/syncserver/Dockerfile .`
+- [ ] `bash services/syncserver/smoke-test.sh both`
+- [ ] Docs still describe sync as preview, not GA
 
 ---
 
 ## Security Checklist
 
 - [ ] Run `go vet ./...` before committing
-- [ ] Close vault after sensitive operations (`zeropass lock`)
+- [ ] Close vault after sensitive operations (`zp lock`)
 - [ ] Store recovery mnemonic securely (printed, not file)
 - [ ] Enable API key on sync server (`--api-key`)
 - [ ] Use HTTPS/TLS for sync server (configure reverse proxy)
@@ -594,14 +607,14 @@ export ZEROPASS_DB_URL=postgresql://user:pass@host/zeropass
 
 ## Next Steps
 
-1. **Initialize vault:** `zeropass init`
-2. **Add first credential:** `zeropass add --type=login`
-3. **Test retrieval:** `zeropass get --copy`
+1. **Initialize vault:** `zp init`
+2. **Add first credential:** `zp add --type=login`
+3. **Test retrieval:** `zp get --copy`
 4. **Setup sync (Phase 2):** Deploy sync server and configure client
 5. **Join community:** GitHub discussions, Discord
 
 ---
 
-**Document Version:** 1.1  
-**Last Updated:** June 2025  
+**Document Version:** 1.2  
+**Last Updated:** April 2026  
 **Owner:** DevOps & Infrastructure

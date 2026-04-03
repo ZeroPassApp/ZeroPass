@@ -389,7 +389,7 @@ defer ZeroBytes(&itemKey)
 
 ```bash
 # Build CLI
-go build -o zeropass ./packages/cli/
+go build -o zp ./packages/cli/
 
 # Build sync server
 go build -o syncserver ./services/syncserver/

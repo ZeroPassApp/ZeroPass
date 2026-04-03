@@ -12,54 +12,78 @@ struct CreateVaultView: View {
     @State private var isBusy = false
     @State private var strength: String = ""
     @State private var strengthScore: Int = 0
+    @State private var localError: String?
+    @State private var passwordStrengthTask: Task<Void, Never>?
 
     private enum Field { case password, confirm }
     @FocusState private var focusedField: Field?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
             Text("Create Vault")
                 .font(.title2)
-                .bold()
+                .fontWeight(.semibold)
 
-            HStack {
-                Text(folderURL?.path ?? "No folder selected")
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(folderURL == nil ? .secondary : .primary)
-                    .accessibilityLabel(folderURL != nil ? "Selected folder: \(folderURL!.lastPathComponent)" : "No folder selected")
+            Text("Choose a folder on this Mac and set the master password you’ll use to unlock this vault.")
+                .foregroundStyle(ZPTheme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
 
-                Spacer()
+            VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+                Text("Vault Location")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(ZPTheme.textSecondary)
 
-                Button("Choose Folder…") { chooseFolder() }
+                HStack {
+                    Text(folderURL?.path ?? "No folder selected yet")
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .foregroundStyle(folderURL == nil ? ZPTheme.textSecondary : ZPTheme.textPrimary)
+                        .accessibilityLabel(folderURL != nil ? "Selected folder: \(folderURL!.lastPathComponent)" : "No folder selected")
+
+                    Spacer()
+
+                    Button("Choose Folder…") {
+                        chooseFolder()
+                    }
                     .disabled(isBusy)
                     .accessibilityLabel("Choose vault folder")
+                }
+                .padding(.horizontal, ZPTheme.spacing12)
+                .padding(.vertical, ZPTheme.spacing10)
+                .background(ZPTheme.authInsetBackground, in: RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                        .stroke(ZPTheme.authInsetBorder, lineWidth: 1)
+                )
             }
 
-            SecureField("Master Password", text: $password)
-                .focused($focusedField, equals: .password)
-                .accessibilityLabel("Master password")
-                .onChange(of: password) { _, newValue in
-                    Task {
-                        if newValue.isEmpty {
-                            strength = ""
-                            strengthScore = 0
-                        } else {
-                            do {
-                                let score = try await vault.scorePassword(newValue)
-                                strength = "Score \(score.score)/4 — \(score.feedback)"
-                                strengthScore = score.score
-                            } catch {
-                                strength = ""
-                                strengthScore = 0
-                            }
-                        }
-                    }
-                }
+            VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+                Text("Master Password")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(ZPTheme.textSecondary)
 
-            SecureField("Confirm Password", text: $confirm)
-                .focused($focusedField, equals: .confirm)
-                .accessibilityLabel("Confirm password")
+                SecureField("Enter a master password", text: $password)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .password)
+                    .accessibilityLabel("Master password")
+                    .onChange(of: password) { _, newValue in
+                        updatePasswordStrength(for: newValue)
+                    }
+            }
+
+            VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+                Text("Confirm Password")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(ZPTheme.textSecondary)
+
+                SecureField("Confirm your master password", text: $confirm)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .confirm)
+                    .accessibilityLabel("Confirm password")
+            }
 
             if !password.isEmpty {
                 PasswordStrengthBar(score: strengthScore)
@@ -75,23 +99,28 @@ struct CreateVaultView: View {
             if !confirm.isEmpty && password != confirm {
                 Text("Passwords do not match")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                        .foregroundStyle(ZPTheme.destructive)
             }
 
-            if let err = vault.lastError {
-                Text(err)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-                    .accessibilityLabel("Error: \(err)")
+            if let localError, !localError.isEmpty {
+                AuthMessageView(
+                    text: localError,
+                    systemImage: "exclamationmark.triangle.fill",
+                    tone: .error
+                )
             }
 
             HStack {
-                Button("Cancel") { dismiss() }
+                Button("Cancel") {
+                    dismiss()
+                }
                     .disabled(isBusy)
 
                 Spacer()
 
-                Button("Create") { create() }
+                Button("Create Vault") {
+                    create()
+                }
                     .buttonStyle(.borderedProminent)
                     .disabled(isBusy || folderURL == nil || password.isEmpty || password != confirm)
                     .keyboardShortcut(.defaultAction)
@@ -101,6 +130,7 @@ struct CreateVaultView: View {
         .padding(24)
         .frame(width: 560)
         .onAppear { focusedField = .password }
+        .onDisappear { passwordStrengthTask?.cancel() }
     }
 
     private var strengthLabel: String {
@@ -138,7 +168,7 @@ struct CreateVaultView: View {
     private func create() {
         guard let url = folderURL else { return }
         isBusy = true
-        vault.lastError = nil
+        localError = nil
 
         Task {
             defer { isBusy = false }
@@ -146,7 +176,31 @@ struct CreateVaultView: View {
                 try await vault.createVault(url, masterPassword: password)
                 dismiss()
             } catch {
-                vault.lastError = error.localizedDescription
+                localError = error.localizedDescription
+            }
+        }
+    }
+
+    private func updatePasswordStrength(for newValue: String) {
+        passwordStrengthTask?.cancel()
+
+        guard !newValue.isEmpty else {
+            strength = ""
+            strengthScore = 0
+            return
+        }
+
+        let candidate = newValue
+        passwordStrengthTask = Task {
+            do {
+                let score = try await vault.scorePassword(candidate)
+                guard !Task.isCancelled, password == candidate else { return }
+                strength = "Score \(score.score)/4 — \(score.feedback)"
+                strengthScore = score.score
+            } catch {
+                guard !Task.isCancelled, password == candidate else { return }
+                strength = ""
+                strengthScore = 0
             }
         }
     }

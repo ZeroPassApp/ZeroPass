@@ -113,3 +113,25 @@ func zpCRestoreVersion(handle int64, id string, version int32) goResult {
 func zpCChangeMasterPassword(handle int64, oldPw, newPw string) goResult {
 	return withCStr2(oldPw, newPw, func(o, n *C.char) C.ZPResult { return ZPChangeMasterPassword(C.long(handle), o, n) })
 }
+
+func zpCSyncSetup(handle int64, configJSON string) goResult {
+	return withCStr(configJSON, func(cfg *C.char) C.ZPResult { return ZPSyncSetup(C.long(handle), cfg) })
+}
+
+func zpCGeneratePassword(length int32, optionsJSON string) goResult {
+	if optionsJSON == "" {
+		return capiFromResult(ZPGeneratePassword(C.int(length), nil))
+	}
+	return withCStr(optionsJSON, func(opts *C.char) C.ZPResult { return ZPGeneratePassword(C.int(length), opts) })
+}
+
+func zpCGeneratePassphrase(words int32, separator string) goResult {
+	if separator == "" {
+		return capiFromResult(ZPGeneratePassphrase(C.int(words), nil))
+	}
+	return withCStr(separator, func(sep *C.char) C.ZPResult { return ZPGeneratePassphrase(C.int(words), sep) })
+}
+
+func zpCScorePassword(password string) goResult {
+	return withCStr(password, func(pw *C.char) C.ZPResult { return ZPScorePassword(pw) })
+}

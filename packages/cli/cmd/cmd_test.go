@@ -693,6 +693,7 @@ func TestRootCommandHelp(t *testing.T) {
 	err := cmd.Execute()
 	assert.NoError(t, err)
 	assert.Contains(t, buf.String(), "ZeroPass")
+	assert.Contains(t, buf.String(), cliCommandName+" [command]")
 }
 
 // TestRootCommandVersion tests version output.
@@ -1313,9 +1314,9 @@ func TestPrintItemsTable_MultipleItems(t *testing.T) {
 			Favorite: true,
 		},
 		{
-			ID:   "id-3",
-			Name: "My Note",
-			Type: types.ItemTypeSecureNote,
+			ID:    "id-3",
+			Name:  "My Note",
+			Type:  types.ItemTypeSecureNote,
 			Notes: "Short note",
 		},
 	}
@@ -2671,7 +2672,7 @@ func TestExecute_Help(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"zeropass", "--help"}
+	os.Args = []string{cliCommandName, "--help"}
 
 	// Execute should not error on --help
 	// Note: Execute prints to stdout, which is fine
@@ -2917,7 +2918,7 @@ func TestExecute_UnknownCommand(t *testing.T) {
 	origArgs := os.Args
 	defer func() { os.Args = origArgs }()
 
-	os.Args = []string{"zeropass", "nonexistent-command"}
+	os.Args = []string{cliCommandName, "nonexistent-command"}
 
 	// Capture stderr
 	oldStderr := os.Stderr

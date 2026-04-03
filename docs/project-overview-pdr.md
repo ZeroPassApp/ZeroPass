@@ -66,6 +66,7 @@ Developers face a critical gap in credential management:
 - ✅ Full encryption engine (Argon2id KDF, AES-256-GCM, HKDF per-item keys, BIP-39 recovery)
 - ✅ 7 credential types (login, API key, SSH key, secure note, credit card, identity, custom)
 - ✅ CLI: init, unlock/lock, add, get, edit, delete, search, list, generate, health, recovery
+- ✅ Runtime secret injection via `zp run` using `zp://item-name/field-name` references
 - ✅ Import from 9 sources: Chrome, Firefox, Safari, 1Password (CSV), 1PUX, Bitwarden, LastPass, KeePass, generic CSV
 - ✅ Export (JSON, CSV, encrypted) with `--force` flag and plaintext warning
 - ✅ Password health analyzer (weak, reused, old)
@@ -80,6 +81,8 @@ Developers face a critical gap in credential management:
 - Mobile apps (Phase 4)
 - Shared vaults (Phase 3)
 - Enterprise admin dashboard (Phase 4)
+- Interactive TUI mode (deferred)
+- Recovery PDF export (deferred)
 
 ---
 
@@ -151,13 +154,13 @@ Developers face a critical gap in credential management:
 
 ---
 
-### Phase 2: Sync Server (Q2-Q3 2026) — **TARGET: 40% complete**
-**Goal:** Multi-device sync with conflict resolution
+### Phase 2: Sync Server (Q2-Q3 2026) — **TARGET: ~35% complete (preview)**
+**Goal:** Self-hosted multi-device sync with predictable conflict resolution
 
 - REST API sync server (HTTP handlers for pull/push)
 - SQLite storage for sync state (WAL mode)
-- Delta sync protocol (timestamps, version vectors)
-- Conflict resolution (last-write-wins + tiebreak)
+- Delta sync protocol (timestamps, integer versions)
+- Conflict resolution (current server path is timestamp-first; versions remain in protocol payloads for reconciliation)
 - Integration testing across devices
 
 **Dependencies:** Phase 1 complete
@@ -237,7 +240,7 @@ Developers face a critical gap in credential management:
 | Phase | Status | ETA | Focus | Deliverables |
 |-------|--------|-----|-------|--------------|
 | 1 (MVP) | ✅ Complete | Done | Local vault + CLI + macOS app | Vault, crypto, 14 cmds, 9-source import/export, macOS SwiftUI app |
-| 2 (Sync) | ~40% | Week 20 | Multi-device sync | Server, delta sync, conflict resolution |
+| 2 (Sync) | ~35% | Week 20 | Preview self-hosted sync | Server, timestamped delta sync, conflict resolution |
 | 3 (Extensions) | 0% | Week 35 | Browser + passkeys | Extension, web UI, shared vaults |
 | 4 (Mobile/Ent.) | 0% | 2027+ | Complete coverage | Mobile apps, admin dashboard |
 

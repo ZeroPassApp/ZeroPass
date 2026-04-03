@@ -11,20 +11,24 @@ struct ContentView: View {
     @EnvironmentObject var vault: VaultClient
 
     var body: some View {
-        Group {
-            switch vault.state {
-            case .noVault:
-                WelcomeView()
-            case .locked:
-                UnlockVaultView()
-            case .showingRecovery(let mnemonic):
-                RecoveryPhraseView(mnemonic: mnemonic)
-            case .unlocked:
-                MainShellView()
-            }
-        }
+        currentScene
+            .authWindowLayout(for: vault.state)
         .task {
             await vault.restoreLastVaultIfAvailable()
+        }
+    }
+
+    @ViewBuilder
+    private var currentScene: some View {
+        switch vault.state {
+        case .noVault:
+            WelcomeView()
+        case .locked:
+            UnlockVaultView()
+        case .showingRecovery(let mnemonic):
+            RecoveryPhraseView(mnemonic: mnemonic)
+        case .unlocked:
+            MainShellView()
         }
     }
 }

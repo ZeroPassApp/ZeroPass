@@ -9,7 +9,7 @@
 │                                                                 │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  CLI Application (Cobra)                                │   │
-│  │  Commands: init, add, get, search, export, sync, etc.   │   │
+│  │  Commands: init, add, get, search, export, recovery...   │   │
 │  └────────────────────┬────────────────────────────────────┘   │
 │                       │                                          │
 │  ┌────────────────────▼────────────────────────────────────┐   │
@@ -40,7 +40,7 @@
 │                                                                 │
 │  ┌───────────────────────────────────────────────────────┐     │
 │  │  REST API Handlers                                    │     │
-│  │  /sync/register  /sync/pull  /sync/push  /health      │     │
+│  │  /devices/register  /sync/pull  /sync/push  /health   │     │
 │  └───────────────────┬─────────────────────────────────┘     │
 │                      │                                         │
 │  ┌───────────────────▼─────────────────────────────────┐     │
@@ -270,7 +270,9 @@ User: zp get "GitHub" --copy
 
 ---
 
-## Sync Protocol Flow
+## Sync Protocol Flow (Current Preview)
+
+> Important: the current sync stack provides transport, conflict reporting, and bridge/macOS preview flows. It is not yet a full generic “pull and automatically merge into the vault” pipeline across every product surface.
 
 ### Registration
 
@@ -278,24 +280,17 @@ User: zp get "GitHub" --copy
 Client (Device 1)
   │
   ├─ Generate device_id (UUID)
-  ├─ Generate public_key for this device
   │
-  └─► POST /sync/register
+  └─► POST /devices/register
       {
         device_id: "uuid-...",
-        name: "MacBook Pro",
-        public_key: "base64-encoded-key"
+        device_name: "MacBook Pro"
       }
       
 Server
   │
   ├─ Store device registration in devices table
-  ├─ Return device_token for future auth
-  │
-  └─ Response: 200 OK (device registered)
-
-Client
-  └─ Store device_token locally for future syncs
+  └─ Response: 201 Created
 ```
 
 ### Pull (Download Changes)
@@ -305,48 +300,40 @@ Client (Device 1, last sync: 2026-04-01 10:00:00)
   │
   ├─ Read last_sync_timestamp from local state
   │
-  └─► POST /sync/pull
-      {
-        device_id: "uuid-...",
-        last_sync_at: 1712054400,
-        limit: 100
-      }
+  └─► GET /sync/pull?device_id=uuid-...&since=1712054400
 
 Server
   │
-  ├─ Query: SELECT * FROM sync_items WHERE updated_at > 1712054400
+  ├─ Query: SELECT * FROM sync_items WHERE timestamp > 1712054400
   ├─ Construct response with changed items
-  │  (Each item: encrypted data + version vector + timestamp)
+  │  (Each item: encrypted payload + version + timestamp)
   │
   └─ Response: 200 OK
      {
        items: [
          {
-           id: "item-123",
+           item_id: "item-123",
+           version: 5,
            device_id: "device-from-another-phone",
-           encrypted_data: "base64-...",
-           version_vector: {device1: 5, device2: 3, ...},
-           updated_at: 1712054500,
-           conflict: false
+           payload: "base64-...",
+           timestamp: 1712054500,
+           checksum: "sha256...",
+           deleted: false
          },
          ...
        ],
-       server_timestamp: 1712054600
+       server_time: 1712054600
      }
 
 Client
   │
   ├─ For each remote item:
-  │  ├─ Check if local item exists
-  │  ├─ If no local: apply remote (merge)
-  │  ├─ If local exists:
-  │  │  ├─ Compare version vectors
-  │  │  ├─ If remote newer: apply remote
-  │  │  ├─ If tied: prefer remote (authority)
-  │  │  ├─ If local newer: skip (will push local)
-  │  └─ Decrypt item (still encrypted, just merged metadata)
+  │  ├─ Build a remote view of changed encrypted items
+  │  ├─ Compare against local pending changes when performing `Sync()`
+  │  ├─ Record conflicts for local resolution/reporting
+  │  └─ Product-specific layers decide how/when to apply pulled items into local vault state
   │
-  └─ Update last_sync_timestamp = server_timestamp
+  └─ Continue sync flow or surface the pulled payloads to the caller
 ```
 
 ### Push (Upload Changes)
@@ -362,10 +349,12 @@ Client (Device 1)
         device_id: "uuid-...",
         items: [
           {
-            id: "item-456",
-            encrypted_data: "base64-...",
-            version_vector: {device1: 6, device2: 3},
-            operation: "upsert"  # or "delete"
+            item_id: "item-456",
+            version: 6,
+            payload: "base64-...",
+            timestamp: 1712054550,
+            checksum: "sha256...",
+            deleted: false
           },
           ...
         ]
@@ -377,32 +366,31 @@ Server
   │  ├─ Check if server has this item
   │  ├─ If not: store new (no conflict)
   │  ├─ If exists:
-  │  │  ├─ Compare version vectors
-  │  │  ├─ If client vector > server vector: accept (client newer)
-  │  │  ├─ If server vector > client vector: reject (server newer)
-  │  │  ├─ If tied: reject (conflict, ask client to re-pull)
-  │  └─ Update server version vector for device
+  │  │  ├─ If server timestamp is newer-or-equal and came from another device: report conflict
+  │  │  ├─ Else: accept client item and persist it
+  │  └─ Update device last_sync_at
   │
-  ├─ Detect any conflicts (versions tied)
+  ├─ Detect any conflicts
   │
-  └─ Response: 200 OK or 409 Conflict
+  └─ Response: 200 OK
      {
+       accepted: ["item-456"],
        conflicts: [
          {
-           id: "item-456",
-           server_version_vector: {...},
-           server_updated_at: 1712054550,
-           resolution: "use_remote"  # or "use_local"
+           item_id: "item-456",
+           server_item: { ... },
+           message: "server has newer or equal version"
          }
-       ]
+       ],
+       server_time: 1712054600
      }
 
 Client
   │
   ├─ If conflicts returned:
-  │  ├─ Merge per server resolution
-  │  ├─ Re-pull to fetch resolved state
-  │  └─ Clear conflict markers
+  │  ├─ Re-pull / inspect server copy
+  │  ├─ Resolve in client/product layer
+  │  └─ Retry as needed
   │
   └─ Sync complete
 ```
@@ -412,37 +400,40 @@ Client
 ## Conflict Resolution Algorithm
 
 ```
-For each item where:
-  - Client has version vector V_client
-  - Server has version vector V_server
+For each item where both sides modified the same record:
+  - Client sends `(timestamp, version, device_id)`
+  - Server primarily compares timestamp + originating device
 
 Conflict Check:
-  if V_client > V_server (client-side clocks advanced more)
-    → Client is newer, accept client version
-    → Server stores client version
-    
-  if V_server > V_client (server-side clocks advanced more)
+  if server.Timestamp > client.Timestamp and server.DeviceID != client.DeviceID
     → Server is newer, reject client version
-    → Server returns "use_remote"
-    
-  if V_client == V_server (simultaneous edits on different devices)
-    → Conflict detected!
-    → Apply tiebreaker:
-       1. Last-write-wins (compare timestamps, account for clock skew)
-       2. If timestamps equal: prefer remote (server authority)
-       3. Mark conflict for client attention
+    → Return server item in conflict payload
+
+  if server.Timestamp == client.Timestamp
+    → Current server behavior is conservative
+    → Cross-device equal timestamps conflict
+    → Client re-pulls and resolves locally
+
+  otherwise
+    → Accept client version and persist it
 ```
 
 **Example:**
 
 ```
-Device A: Item 'GitHub' edited at 10:00:00, version_vector: {A: 3, B: 1}
-Device B: Item 'GitHub' edited at 10:00:05, version_vector: {A: 2, B: 2}
+Device A: Item 'GitHub' edited at 10:00:00, version: 3
+Device B: Item 'GitHub' edited at 10:00:05, version: 2
 
 Server receives push from B at 10:00:10:
-  V_B (2,2) vs V_server(3,1)
-  → (2,2) < (3,1)  [B's 2 < A's 3]
-  → Server-side is newer
+  client.Timestamp > server.Timestamp
+  → Client is newer by timestamp
+  → Accept B's version
+
+If both timestamps had tied across devices:
+  → Current server path reports a conflict
+  → Client re-pulls and resolves locally
+
+If server timestamp had been newer from another device:
   → Reject B's version, respond with "use_remote"
   → B re-pulls and gets A's version
 ```
@@ -488,16 +479,13 @@ Notes:
 
 ```json
 {
-  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "item_id": "550e8400-e29b-41d4-a716-446655440000",
+  "version": 5,
   "device_id": "device-uuid",
-  "encrypted_data": "base64(...)",
-  "version_vector": {
-    "device-uuid-1": 5,
-    "device-uuid-2": 3
-  },
-  "updated_at": 1712054400,
-  "created_at": 1712054300,
-  "operation": "upsert"
+  "payload": "base64(...)",
+  "timestamp": 1712054400,
+  "checksum": "sha256(...)",
+  "deleted": false
 }
 ```
 
@@ -547,14 +535,13 @@ Notes:
 
 ```sql
 CREATE TABLE sync_items (
-  id TEXT PRIMARY KEY,
+  item_id TEXT PRIMARY KEY,
+  version INTEGER NOT NULL DEFAULT 1,
   device_id TEXT NOT NULL,
-  encrypted_data BLOB NOT NULL,
-  version_vector JSON NOT NULL,
-  updated_at INTEGER NOT NULL,
-  created_at INTEGER NOT NULL,
-  INDEX idx_device_id (device_id),
-  INDEX idx_updated_at (updated_at)
+  payload TEXT NOT NULL,
+  timestamp INTEGER NOT NULL,
+  checksum TEXT NOT NULL DEFAULT '',
+  deleted BOOLEAN NOT NULL DEFAULT FALSE
 );
 ```
 
@@ -563,10 +550,8 @@ CREATE TABLE sync_items (
 ```sql
 CREATE TABLE devices (
   device_id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  public_key TEXT,
-  last_sync_at INTEGER,
-  created_at INTEGER
+  device_name TEXT NOT NULL,
+  last_sync_at INTEGER NOT NULL DEFAULT 0
 );
 ```
 

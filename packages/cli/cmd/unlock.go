@@ -76,7 +76,7 @@ func runUnlock(cmd *cobra.Command, args []string) error {
 func openVault(vaultPath string) (*store.Vault, error) {
 	v, err := store.Open(vaultPath)
 	if err != nil {
-		return nil, fmt.Errorf("open vault: %w (run 'zeropass init' to create a vault)", err)
+		return nil, fmt.Errorf("open vault: %w (run '%s' to create a vault)", err, cliUsage("init"))
 	}
 	return v, nil
 }

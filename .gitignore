@@ -19,8 +19,8 @@ coverage.out
 coverage.html
 *.pem
 *.key
-cli
-syncserver
+/cli
+/syncserver
 
 # bridge build outputs
 bridge/*.a

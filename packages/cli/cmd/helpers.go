@@ -91,7 +91,7 @@ func openAndUnlockVault() (*store.Vault, error) {
 
 	v, err := store.Open(vaultPath)
 	if err != nil {
-		return nil, fmt.Errorf("open vault: %w (run 'zeropass init' to create a vault)", err)
+		return nil, fmt.Errorf("open vault: %w (run '%s' to create a vault)", err, cliUsage("init"))
 	}
 
 	pw, err := promptPassword("Enter master password: ")

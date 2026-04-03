@@ -151,36 +151,42 @@ vault/
 
 ### `/core/sync/` — Sync Engine
 
-**Purpose:** Delta sync between client and server, conflict resolution, multi-device coordination.
+**Purpose:** Preview sync transport between client and server, conflict detection, and metadata exchange for multi-device coordination.
 
 **Submodules:**
 
 | Module | Responsibility |
 |--------|-----------------|
 | `protocol/types.go` | SyncItem, Pull/Push request/response, ConflictInfo, DeviceInfo, timestamps |
-| `client/sync_client.go` | HTTP sync client: Pull, Push, FullSync modes with exponential backoff |
+| `client/sync_client.go` | HTTP sync client: Pull, Push, FullSync orchestration with conflict bookkeeping |
 | `server/sync_handler.go` | HTTP handlers: `/sync/pull`, `/sync/push`, `/devices/register`, health check |
 | `conflict/resolver.go` | Conflict resolution: last-write-wins → version tiebreak → remote preference |
 
 **Sync Protocol:**
 ```
-Client: Register device (device_id, name, public_key)
+Client: Register device (device_id, name)
   ↓
 Client: Pull request (last_sync_timestamp)
   ← Server: Changed items since timestamp
   
-Client: Apply remote changes, resolve conflicts, merge local changes
+Client: Inspect remote items / build conflict context
   
-Client: Push request (local changed items + version vectors)
+Client: Push request (local changed items + timestamps + integer versions)
   → Server: Apply, detect conflicts, respond with resolution hints
   
-Client: Re-pull and merge if conflicts detected
+Client: Re-pull and resolve locally if conflicts detected
 ```
 
+**Current Implementation Boundary:**
+- `core/sync/client` provides HTTP pull/push/sync orchestration and conflict bookkeeping
+- `bridge/sync_api.go` and the macOS app expose sync as a preview feature
+- Pulled items are not yet automatically written back into the local vault store by the generic sync client
+- Tombstones and versions are represented in protocol payloads, but the end-to-end local apply/merge path is still incomplete
+
 **Conflict Resolution Rules:**
-1. Last-write-wins (compare `updated_at` timestamps)
-2. If equal timestamps, compare version vectors (logical clocks)
-3. If still tied, prefer remote (authority = server)
+1. Server admission is timestamp-first (`existing.Timestamp >= item.Timestamp` from another device conflicts)
+2. Integer item versions are still carried in the protocol for client-side reconciliation and future expansion
+3. If the server rejects an item, the client re-pulls and merges against the returned server copy
 
 **Storage:**
 - Server: SQLite (sync_items table + devices table)
@@ -194,7 +200,7 @@ Client: Re-pull and merge if conflicts detected
 
 **Purpose:** User-facing CLI interface built on Cobra framework.
 
-**Root Command:** `zeropass`
+**Root Command:** `zp`
 
 **Global Flags:**
 - `--vault-path` — Vault directory (default: `~/.zeropass`)
@@ -219,7 +225,7 @@ Client: Re-pull and merge if conflicts detected
 | `recovery` | Manage recovery: validate (`ValidateRecovery`), test, regenerate mnemonic; auto-rotates on recovery unlock |
 | `import` | Import from other PMs (Chrome, Firefox, Safari, 1Password, 1PUX, Bitwarden, LastPass, KeePass, CSV) |
 | `export` | Export vault (json, csv, encrypted); `--force` flag skips plaintext warning |
-| `run` | Inject secrets via `.env` file (`zp run -- npm start`) |
+| `run` | Inject secrets via `.env` file (`zp://item-name/field-name`) |
 | `env` | Environment management (dev/staging/prod tagging) |
 
 **Helper Functions** (`cmd/helpers.go`):
@@ -268,26 +274,25 @@ items, err := client.Search("api") // Returns decrypted items
 
 **Flags:**
 - `--port` — HTTP listen port (default: 8443)
-- `--db-path` — SQLite database path (default: `./sync.db`)
+- `--db-path` — SQLite database path (default: `zeropass-sync.db`)
 - `--api-key` — Bearer token for authentication (optional)
 
 **Database Schema:**
 ```sql
 CREATE TABLE sync_items (
-  id TEXT PRIMARY KEY,
+  item_id TEXT PRIMARY KEY,
+  version INTEGER NOT NULL DEFAULT 1,
   device_id TEXT NOT NULL,
-  encrypted_data BLOB NOT NULL,
-  version_vector JSON NOT NULL,
-  updated_at INTEGER NOT NULL,
-  created_at INTEGER NOT NULL
+  payload TEXT NOT NULL,
+  timestamp INTEGER NOT NULL,
+  checksum TEXT NOT NULL DEFAULT '',
+  deleted BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE devices (
   device_id TEXT PRIMARY KEY,
-  name TEXT,
-  public_key TEXT,
-  last_sync_at INTEGER,
-  created_at INTEGER
+  device_name TEXT NOT NULL,
+  last_sync_at INTEGER NOT NULL DEFAULT 0
 );
 ```
 
@@ -295,8 +300,8 @@ CREATE TABLE devices (
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/sync/register` | POST | Register device |
-| `/sync/pull` | POST | Download changed items |
+| `/devices/register` | POST | Register device |
+| `/sync/pull` | GET | Download changed items |
 | `/sync/push` | POST | Upload changed items |
 | `/health` | GET | Server health check |
 
@@ -304,7 +309,7 @@ CREATE TABLE devices (
 - Optional bearer token auth via `--api-key` flag
 - All item data encrypted (server cannot read)
 - WAL mode (write-ahead logging) for crash recovery
-- CORS headers configurable
+- CORS headers currently hard-coded to allow common development flows
 
 ---
 
@@ -378,9 +383,9 @@ defer ZeroBytes(&key)
 
 ### CLI
 ```bash
-go build -o zeropass ./packages/cli/
-./zeropass init
-./zeropass add --type=login
+go build -o zp ./packages/cli/
+./zp init
+./zp add --type=login
 ```
 
 ### Sync Server
