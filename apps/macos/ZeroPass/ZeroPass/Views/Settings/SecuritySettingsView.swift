@@ -13,6 +13,9 @@ struct SecuritySettingsView: View {
     @State private var showingExportConfirm = false
     @State private var exportConfirmText: String = ""
 
+    @State private var showingCSVExportConfirm = false
+    @State private var csvExportConfirmText: String = ""
+
     var body: some View {
         Form {
             Section("Auto-lock") {
@@ -71,10 +74,25 @@ struct SecuritySettingsView: View {
                         showingExportConfirm = true
                     }
                     .disabled(!vault.isUnlocked)
+
+                    Button("Export CSV…") {
+                        showingCSVExportConfirm = true
+                    }
+                    .disabled(!vault.isUnlocked)
                 }
 
-                Button("Import CSV…") {
-                    importCSV()
+                Menu("Import from…") {
+                    Button("Chrome CSV…") { importFrom(.chrome) }
+                    Button("Firefox CSV…") { importFrom(.firefox) }
+                    Button("Safari CSV…") { importFrom(.safari) }
+                    Divider()
+                    Button("1Password CSV…") { importFrom(.onePassword) }
+                    Button("1Password 1PUX…") { importFrom(.onePasswordPUX) }
+                    Button("Bitwarden…") { importFrom(.bitwarden) }
+                    Button("LastPass CSV…") { importFrom(.lastPass) }
+                    Button("KeePass CSV…") { importFrom(.keepass) }
+                    Divider()
+                    Button("Generic CSV…") { importFrom(.csv) }
                 }
                 .disabled(!vault.isUnlocked)
             }
@@ -121,6 +139,17 @@ struct SecuritySettingsView: View {
         } message: {
             Text("Exported JSON is unencrypted. Anyone with the file can read your secrets.")
         }
+        .alert("Export Unencrypted CSV", isPresented: $showingCSVExportConfirm) {
+            TextField("Type EXPORT to continue", text: $csvExportConfirmText)
+            Button("Cancel", role: .cancel) { csvExportConfirmText = "" }
+            Button("Export", role: .destructive) {
+                guard csvExportConfirmText.uppercased() == "EXPORT" else { return }
+                exportCSV()
+                csvExportConfirmText = ""
+            }
+        } message: {
+            Text("Exported CSV is unencrypted. Anyone with the file can read your secrets.")
+        }
     }
 
     private func exportEncrypted() {
@@ -153,7 +182,26 @@ struct SecuritySettingsView: View {
         }
     }
 
+    private func exportCSV() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "zeropass-export.csv"
+
+        if panel.runModal() == .OK, let url = panel.url {
+            Task {
+                do {
+                    try await vault.exportCSV(to: url)
+                } catch {
+                    vault.lastError = error.localizedDescription
+                }
+            }
+        }
+    }
+
     private func importCSV() {
+        importFrom(.csv)
+    }
+
+    private func importFrom(_ source: VaultClient.ImportSource) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
@@ -162,8 +210,7 @@ struct SecuritySettingsView: View {
         if panel.runModal() == .OK, let url = panel.url {
             Task {
                 do {
-                    _ = try await vault.importCSV(from: url)
-                    try await vault.refreshItems()
+                    _ = try await vault.importFrom(source: source, url: url)
                 } catch {
                     vault.lastError = error.localizedDescription
                 }

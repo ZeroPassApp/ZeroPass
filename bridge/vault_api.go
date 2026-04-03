@@ -191,13 +191,15 @@ func ZPUnlockWithRecovery(handle C.long, mnemonic *C.char) (res C.ZPResult) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if err := s.vault.UnlockWithRecovery(m); err != nil {
+	newMnemonic, err := s.vault.UnlockWithRecovery(m)
+	if err != nil {
 		return errorResult(err)
 	}
 	if err := ensureManagersUnlocked(s); err != nil {
-		return errorResult(err)
+		// Still return the mnemonic so the client can show it
+		return okJSON(map[string]any{"newMnemonic": newMnemonic, "warning": err.Error()})
 	}
-	return okNoData()
+	return okJSON(map[string]any{"newMnemonic": newMnemonic})
 }
 
 //export ZPUnlockWithKey

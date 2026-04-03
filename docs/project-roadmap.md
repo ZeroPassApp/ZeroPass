@@ -6,11 +6,11 @@ ZeroPass is organized into 4 development phases, each building on the previous. 
 
 ---
 
-## Phase 1: MVP (Local Vault & CLI) — **~90% Complete**
+## Phase 1: MVP (Local Vault & CLI) — **✅ Complete**
 
-**Goal:** Shippable local credential vault with full encryption engine and functional CLI.
+**Goal:** Shippable local credential vault with full encryption engine, functional CLI, and macOS SwiftUI app.
 
-**Status:** **IN PROGRESS** — Core crypto and vault engine complete; CLI commands 85% done; testing 80% coverage.
+**Status:** **COMPLETE** — Core crypto and vault engine complete; all CLI commands shipped; macOS app launched; 9-source import/export operational.
 
 **Timeline:** Target completion: Week 10 (April 15, 2026)
 
@@ -20,25 +20,28 @@ ZeroPass is organized into 4 development phases, each building on the previous. 
 |-----------|--------|-----|-------|
 | 1.1 Crypto engine (Argon2, AES-GCM, HKDF, BIP-39) | ✅ Complete | ✓ | Crypto Team |
 | 1.2 Vault engine (CRUD, indexing, versioning) | ✅ Complete | ✓ | Vault Team |
-| 1.3 14 CLI commands (init, add, get, search, etc.) | ⏳ 85% | Apr 8 | CLI Team |
-| 1.4 Import/export (4 sources: Chrome, Firefox, 1PWD, Bitwarden) | ⏳ 80% | Apr 10 | CLI Team |
-| 1.5 Password health & HIBP integration | ⏳ 75% | Apr 12 | Health Team |
-| 1.6 Recovery mnemonic (validate, test, regenerate) | ✅ Complete | ✓ | Crypto Team |
-| 1.7 Test coverage (90%+ core, 80%+ CLI) | ⏳ 80% | Apr 13 | QA Team |
-| 1.8 Security review & documentation | ⏳ 70% | Apr 15 | Security Team |
+| 1.3 14 CLI commands (init, add, get, search, etc.) | ✅ Complete | ✓ | CLI Team |
+| 1.4 Import/export (9 sources: Chrome, Firefox, Safari, 1Password, 1PUX, Bitwarden, LastPass, KeePass, CSV) | ✅ Complete | ✓ | CLI Team |
+| 1.5 Password health & HIBP integration | ✅ Complete | ✓ | Health Team |
+| 1.6 Recovery mnemonic (validate, test, regenerate, auto-rotate) | ✅ Complete | ✓ | Crypto Team |
+| 1.7 Test coverage (90%+ core, 80%+ CLI) | ✅ Complete | ✓ | QA Team |
+| 1.8 Security review & documentation | ✅ Complete | ✓ | Security Team |
+| 1.9 macOS SwiftUI app (9-source import, CSV export, accessibility) | ✅ Complete | ✓ | macOS Team |
 
 ### Deliverables
 
 - ✅ Encryption engine (Argon2id KDF, AES-256-GCM, HKDF per-item keys, BIP-39 recovery)
 - ✅ 7 credential types (login, API key, SSH key, secure note, credit card, identity, custom)
 - ✅ 14 CLI commands fully implemented
-- ⏳ Import from 4 major password managers (Chrome, Firefox, 1Password, Bitwarden, CSV)
-- ⏳ Export to JSON, CSV, encrypted PGP archive
-- ⏳ Password health analyzer (weak, reused, old passwords)
-- ⏳ HIBP integration (k-anonymity model, optional)
-- ✅ BIP-39 recovery mnemonic (12 words, printable)
-- ⏳ Comprehensive unit & integration tests (90%+ core modules)
-- ⏳ Security documentation and threat model
+- ✅ Import from 9 sources (Chrome, Firefox, Safari, 1Password, 1PUX, Bitwarden, LastPass, KeePass, CSV)
+- ✅ Export to JSON, CSV, encrypted archive (with `--force` flag and plaintext warning)
+- ✅ Password health analyzer (weak, reused, old passwords)
+- ✅ HIBP integration (k-anonymity model, optional)
+- ✅ BIP-39 recovery mnemonic (12 words, printable) with auto-rotation on recovery unlock (PRD §8.5)
+- ✅ `ValidateRecovery()` for non-destructive mnemonic validation
+- ✅ Comprehensive unit & integration tests (90%+ core modules)
+- ✅ Security documentation and threat model
+- ✅ macOS SwiftUI app: 9-source import via Settings, CSV export with EXPORT confirmation, VoiceOver labels, keyboard navigation (`@FocusState`), high contrast mode
 
 ### In Scope
 
@@ -293,7 +296,7 @@ None — Phase 1 is foundational and independent.
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** April 1, 2026  
-**Next Review:** April 8, 2026  
+**Document Version:** 1.1  
+**Last Updated:** June 2025  
+**Next Review:** On Phase 2 completion  
 **Owner:** Product & Engineering

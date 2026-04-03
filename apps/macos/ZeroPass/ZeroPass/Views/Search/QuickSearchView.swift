@@ -43,6 +43,8 @@ struct QuickSearchView: View {
                                     .listRowSeparator(.hidden)
                                     .listRowInsets(EdgeInsets())
                                     .contentShape(Rectangle())
+                                    .accessibilityLabel("\(item.name), \(item.type.displayName)")
+                                    .accessibilityHint("Activate to open")
                                     .onTapGesture {
                                         selectedID = item.id
                                         openInMainWindow()
@@ -56,6 +58,8 @@ struct QuickSearchView: View {
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets())
                                 .contentShape(Rectangle())
+                                .accessibilityLabel("\(item.name), \(item.type.displayName)")
+                                .accessibilityHint("Activate to open")
                                 .onTapGesture {
                                     selectedID = item.id
                                     openInMainWindow()

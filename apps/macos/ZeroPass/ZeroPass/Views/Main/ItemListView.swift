@@ -73,6 +73,8 @@ struct ItemListView: View {
                     ForEach(filteredItems) { item in
                         ItemRow(item: item)
                             .tag(item.id)
+                            .accessibilityLabel("\(item.name), \(item.type.displayName)")
+                            .accessibilityHint("Double-click to view details")
                             .contextMenu {
                                 contextMenuItems(for: item)
                             }
@@ -106,6 +108,7 @@ struct ItemListView: View {
                     Image(systemName: "arrow.up.arrow.down")
                 }
                 .help("Sort items")
+                .accessibilityLabel("Sort items")
             }
         }
         .alert("Delete Item", isPresented: Binding(

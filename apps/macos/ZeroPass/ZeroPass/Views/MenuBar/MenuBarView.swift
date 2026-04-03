@@ -37,6 +37,7 @@ struct MenuBarView: View {
                         .font(.system(size: 11))
                 }
                 .buttonStyle(.borderless)
+                .accessibilityLabel("Open main window")
             }
 
             Divider()
@@ -61,6 +62,7 @@ struct MenuBarView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Quick Search, Command K")
 
                 // Search field
                 TextField("Filter items…", text: $query)
@@ -95,6 +97,7 @@ struct MenuBarView: View {
                             .font(.system(size: 11))
                     }
                     .buttonStyle(.borderless)
+                    .accessibilityLabel("Lock vault")
                 }
             } else {
                 Text("Unlock to view items")

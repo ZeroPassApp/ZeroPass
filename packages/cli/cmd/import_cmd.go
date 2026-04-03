@@ -14,7 +14,7 @@ import (
 var importCmd = &cobra.Command{
 	Use:   "import",
 	Short: "Import items from another password manager",
-	Long:  `Import credentials from Chrome, Firefox, 1Password, Bitwarden, or a generic CSV file.`,
+	Long:  `Import credentials from Chrome, Firefox, Safari, 1Password (CSV or 1PUX), Bitwarden, LastPass, KeePass, or a generic CSV file.`,
 	RunE:  runImport,
 }
 
@@ -24,7 +24,7 @@ var (
 )
 
 func init() {
-	importCmd.Flags().StringVar(&importFrom, "from", "", "source format: chrome|firefox|1password|bitwarden|csv")
+	importCmd.Flags().StringVar(&importFrom, "from", "", "source format: chrome|firefox|safari|1password|1pux|bitwarden|lastpass|keepass|csv")
 	importCmd.Flags().StringVar(&importFile, "file", "", "input file path")
 	_ = importCmd.MarkFlagRequired("from")
 	_ = importCmd.MarkFlagRequired("file")
@@ -79,6 +79,34 @@ func runImport(cmd *cobra.Command, args []string) error {
 		}
 		return addImportedItems(cmd, mgr, imported)
 
+	case "safari":
+		imported, err := importexport.ImportSafari(f)
+		if err != nil {
+			return fmt.Errorf("import Safari: %w", err)
+		}
+		return addImportedItems(cmd, mgr, imported)
+
+	case "lastpass":
+		imported, err := importexport.ImportLastPass(f)
+		if err != nil {
+			return fmt.Errorf("import LastPass: %w", err)
+		}
+		return addImportedItems(cmd, mgr, imported)
+
+	case "keepass":
+		imported, err := importexport.ImportKeePass(f)
+		if err != nil {
+			return fmt.Errorf("import KeePass: %w", err)
+		}
+		return addImportedItems(cmd, mgr, imported)
+
+	case "1pux":
+		imported, err := importexport.Import1PUX(f)
+		if err != nil {
+			return fmt.Errorf("import 1PUX: %w", err)
+		}
+		return addImportedItems(cmd, mgr, imported)
+
 	case "csv":
 		imported, err := importexport.ImportCSV(f, importexport.CSVMapping{
 			Name:     0,
@@ -95,7 +123,7 @@ func runImport(cmd *cobra.Command, args []string) error {
 		return addImportedItems(cmd, mgr, imported)
 
 	default:
-		return fmt.Errorf("unknown import source: %s. Use chrome, firefox, 1password, bitwarden, or csv", importFrom)
+		return fmt.Errorf("unknown import source: %s. Use chrome, firefox, safari, 1password, 1pux, bitwarden, lastpass, keepass, or csv", importFrom)
 	}
 }
 

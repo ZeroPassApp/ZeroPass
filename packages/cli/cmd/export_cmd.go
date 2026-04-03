@@ -20,11 +20,13 @@ var exportCmd = &cobra.Command{
 var (
 	exportFormat     string
 	exportOutputFile string
+	exportForce      bool
 )
 
 func init() {
 	exportCmd.Flags().StringVar(&exportFormat, "format", "json", "export format: json|csv|encrypted")
 	exportCmd.Flags().StringVar(&exportOutputFile, "file", "", "output file path (default: stdout)")
+	exportCmd.Flags().BoolVar(&exportForce, "force", false, "skip plaintext export warning")
 	rootCmd.AddCommand(exportCmd)
 }
 
@@ -50,6 +52,15 @@ func runExport(cmd *cobra.Command, args []string) error {
 	plainItems := make([]types.Item, len(items))
 	for i, itm := range items {
 		plainItems[i] = *itm
+	}
+
+	// Warn before plaintext export
+	if exportFormat != "encrypted" && !exportForce {
+		fmt.Fprintln(cmd.ErrOrStderr(), "⚠ WARNING: This exports your vault in PLAINTEXT.")
+		fmt.Fprintln(cmd.ErrOrStderr(), "  Anyone with this file can read ALL your secrets.")
+		if !promptYesNo("Continue?") {
+			return fmt.Errorf("export cancelled")
+		}
 	}
 
 	// Determine output writer

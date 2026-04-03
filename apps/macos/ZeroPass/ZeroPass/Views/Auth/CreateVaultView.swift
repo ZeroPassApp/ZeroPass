@@ -12,6 +12,9 @@ struct CreateVaultView: View {
     @State private var isBusy = false
     @State private var strength: String = ""
 
+    private enum Field { case password, confirm }
+    @FocusState private var focusedField: Field?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Create Vault")
@@ -23,30 +26,38 @@ struct CreateVaultView: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .foregroundStyle(folderURL == nil ? .secondary : .primary)
+                    .accessibilityLabel(folderURL != nil ? "Selected folder: \(folderURL!.lastPathComponent)" : "No folder selected")
 
                 Spacer()
 
                 Button("Choose Folder…") { chooseFolder() }
                     .disabled(isBusy)
+                    .accessibilityLabel("Choose vault folder")
             }
 
             SecureField("Master Password", text: $password)
+                .focused($focusedField, equals: .password)
+                .accessibilityLabel("Master password")
                 .onChange(of: password) { _, newValue in
                     Task { strength = await vault.scorePasswordSummary(newValue) }
                 }
 
             SecureField("Confirm Password", text: $confirm)
+                .focused($focusedField, equals: .confirm)
+                .accessibilityLabel("Confirm password")
 
             if !strength.isEmpty {
                 Text(strength)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .accessibilityLabel("Password strength: \(strength)")
             }
 
             if let err = vault.lastError {
                 Text(err)
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
+                    .accessibilityLabel("Error: \(err)")
             }
 
             HStack {
@@ -58,10 +69,12 @@ struct CreateVaultView: View {
                 Button("Create") { create() }
                     .disabled(isBusy || folderURL == nil || password.isEmpty || password != confirm)
                     .keyboardShortcut(.defaultAction)
+                    .accessibilityLabel("Create vault")
             }
         }
         .padding(20)
         .frame(width: 560)
+        .onAppear { focusedField = .password }
     }
 
     private func chooseFolder() {

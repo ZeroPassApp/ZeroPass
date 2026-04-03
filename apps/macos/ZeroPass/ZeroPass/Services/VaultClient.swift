@@ -220,11 +220,11 @@ final class VaultClient: ObservableObject {
     func unlockWithRecovery(mnemonic: String) async throws {
         guard let h = handle else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
 
-        try await Task.detached(priority: .userInitiated) {
+        let newMnemonic = try await Task.detached(priority: .userInitiated) {
             try ZPBridge.unlockWithRecovery(handle: h, mnemonic: mnemonic)
         }.value
 
-        state = .unlocked
+        state = .showingRecovery(mnemonic: newMnemonic)
         autoLock.setVaultUnlocked(true)
         autoLock.recordActivity()
         try await refreshItems()
@@ -544,6 +544,16 @@ final class VaultClient: ObservableObject {
         autoLock.recordActivity()
     }
 
+    func exportCSV(to url: URL) async throws {
+        guard let h = handle else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
+
+        try await Task.detached(priority: .utility) {
+            try ZPBridge.exportCSV(handle: h, path: url.path)
+        }.value
+
+        autoLock.recordActivity()
+    }
+
     @discardableResult
     func importCSV(from url: URL) async throws -> Int {
         guard let h = handle else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
@@ -553,6 +563,33 @@ final class VaultClient: ObservableObject {
         }.value
 
         autoLock.recordActivity()
+        return count
+    }
+
+    enum ImportSource {
+        case chrome, firefox, safari, onePassword, onePasswordPUX, bitwarden, lastPass, keepass, csv
+    }
+
+    @discardableResult
+    func importFrom(source: ImportSource, url: URL) async throws -> Int {
+        guard let h = handle else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
+
+        let count = try await Task.detached(priority: .utility) {
+            switch source {
+            case .chrome: return try ZPBridge.importChrome(handle: h, path: url.path)
+            case .firefox: return try ZPBridge.importFirefox(handle: h, path: url.path)
+            case .safari: return try ZPBridge.importSafari(handle: h, path: url.path)
+            case .onePassword: return try ZPBridge.import1Password(handle: h, path: url.path)
+            case .onePasswordPUX: return try ZPBridge.import1PUX(handle: h, path: url.path)
+            case .bitwarden: return try ZPBridge.importBitwarden(handle: h, path: url.path)
+            case .lastPass: return try ZPBridge.importLastPass(handle: h, path: url.path)
+            case .keepass: return try ZPBridge.importKeePass(handle: h, path: url.path)
+            case .csv: return try ZPBridge.importCSV(handle: h, path: url.path)
+            }
+        }.value
+
+        autoLock.recordActivity()
+        try await refreshItems()
         return count
     }
 

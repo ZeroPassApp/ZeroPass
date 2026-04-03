@@ -19,6 +19,8 @@ struct ItemEditorView: View, Identifiable {
     @State private var passwordStrength: String = ""
     @State private var generatorTargetKey: String?
 
+    @FocusState private var nameFieldFocused: Bool
+
     // MARK: - Computed Helpers
 
     /// Orders field keys with well-known fields first, then alphabetical custom keys.
@@ -60,6 +62,7 @@ struct ItemEditorView: View, Identifiable {
                 Image(systemName: item.type.symbolName)
                     .font(.title3)
                     .foregroundStyle(item.type.color)
+                    .accessibilityHidden(true)
 
                 Text(item.id.isEmpty ? "New Item" : "Edit Item")
                     .font(.title2)
@@ -80,6 +83,8 @@ struct ItemEditorView: View, Identifiable {
                     }
 
                     TextField("Name", text: $item.name)
+                        .focused($nameFieldFocused)
+                        .onAppear { nameFieldFocused = true }
 
                     Toggle("Favorite", isOn: $item.favorite)
                 }
@@ -108,6 +113,7 @@ struct ItemEditorView: View, Identifiable {
                                 }
                                 .buttonStyle(.borderless)
                                 .help("Generate password")
+                                .accessibilityLabel("Generate password for \(fieldLabel(key))")
                             }
 
                             Button(role: .destructive) {
@@ -117,6 +123,7 @@ struct ItemEditorView: View, Identifiable {
                             }
                             .buttonStyle(.borderless)
                             .help("Remove field")
+                            .accessibilityLabel("Remove \(fieldLabel(key)) field")
                         }
                     }
 
@@ -136,6 +143,7 @@ struct ItemEditorView: View, Identifiable {
                         .buttonStyle(.borderless)
                         .disabled(newFieldKey.isEmpty)
                         .help("Add field")
+                        .accessibilityLabel("Add new field")
                     }
                 }
 

@@ -103,8 +103,9 @@ func TestUnlockWithRecovery(t *testing.T) {
 	v.Lock()
 
 	// Unlock with mnemonic
-	err = v.UnlockWithRecovery(result.Mnemonic)
+	newMnemonic, err := v.UnlockWithRecovery(result.Mnemonic)
 	require.NoError(t, err)
+	assert.NotEmpty(t, newMnemonic)
 	vk2, _ := v.VaultKey()
 	assert.Equal(t, vk1Copy, vk2) // same vault key regardless of unlock method
 	v.Lock()
@@ -119,7 +120,7 @@ func TestUnlockWithWrongMnemonic(t *testing.T) {
 	require.NoError(t, err)
 	v.Lock()
 
-	err = v.UnlockWithRecovery("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
+	_, err = v.UnlockWithRecovery("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about")
 	assert.Error(t, err)
 }
 
@@ -382,7 +383,7 @@ func TestUnlockWithRecoveryAlreadyUnlocked(t *testing.T) {
 	assert.False(t, v.IsLocked())
 
 	// UnlockWithRecovery when already unlocked — should be no-op
-	err = v.UnlockWithRecovery(result.Mnemonic)
+	_, err = v.UnlockWithRecovery(result.Mnemonic)
 	assert.NoError(t, err)
 	assert.False(t, v.IsLocked())
 }
@@ -427,7 +428,7 @@ func TestUnlockWithRecoveryWrongMnemonicOnLockedVault(t *testing.T) {
 	require.NoError(t, err)
 	v.Lock()
 
-	err = v.UnlockWithRecovery("invalid mnemonic phrase here")
+	_, err = v.UnlockWithRecovery("invalid mnemonic phrase here")
 	assert.Error(t, err)
 	assert.True(t, v.IsLocked())
 }
@@ -497,7 +498,8 @@ func TestOpenUnlockRelock(t *testing.T) {
 
 	v.Lock()
 
-	require.NoError(t, v.UnlockWithRecovery(result.Mnemonic))
+	_, err = v.UnlockWithRecovery(result.Mnemonic)
+	require.NoError(t, err)
 	vk2, err := v.VaultKey()
 	require.NoError(t, err)
 	assert.Equal(t, vk1Copy, vk2)
@@ -568,7 +570,7 @@ func TestUnlockWithRecoveryInvalidBase64(t *testing.T) {
 	// Corrupt the encrypted recovery key to be invalid base64
 	v.meta.EncryptedRecoveryKey = "invalid-base64!!!"
 	mnemonic := "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-	err = v.UnlockWithRecovery(mnemonic)
+	_, err = v.UnlockWithRecovery(mnemonic)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "decode encrypted recovery key")
 }
@@ -658,7 +660,7 @@ func TestRegenerateRecovery(t *testing.T) {
 
 	// Lock and unlock with the new mnemonic
 	v.Lock()
-	err = v.UnlockWithRecovery(newMnemonic)
+	_, err = v.UnlockWithRecovery(newMnemonic)
 	require.NoError(t, err)
 	vk2, err := v.VaultKey()
 	require.NoError(t, err)
@@ -666,7 +668,7 @@ func TestRegenerateRecovery(t *testing.T) {
 
 	// Old mnemonic should no longer work
 	v.Lock()
-	err = v.UnlockWithRecovery(oldMnemonic)
+	_, err = v.UnlockWithRecovery(oldMnemonic)
 	assert.Error(t, err)
 }
 
@@ -700,13 +702,107 @@ func TestRegenerateRecoveryPersistsMetadata(t *testing.T) {
 	v2, err := Open(dir)
 	require.NoError(t, err)
 
-	err = v2.UnlockWithRecovery(newMnemonic)
+	_, err = v2.UnlockWithRecovery(newMnemonic)
 	require.NoError(t, err)
 	assert.False(t, v2.IsLocked())
 	v2.Lock()
 }
 
-// --- Feature 3: Encrypted index integration in store tests ---
+func TestUnlockWithRecoveryAutoRotation(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	originalMnemonic := result.Mnemonic
+	v.Lock()
+
+	// First recovery unlock — should auto-rotate
+	newMnemonic1, err := v.UnlockWithRecovery(originalMnemonic)
+	require.NoError(t, err)
+	assert.NotEmpty(t, newMnemonic1)
+	assert.NotEqual(t, originalMnemonic, newMnemonic1)
+	v.Lock()
+
+	// Original mnemonic should no longer work
+	_, err = v.UnlockWithRecovery(originalMnemonic)
+	assert.Error(t, err)
+	assert.True(t, v.IsLocked())
+
+	// New mnemonic should work and rotate again
+	newMnemonic2, err := v.UnlockWithRecovery(newMnemonic1)
+	require.NoError(t, err)
+	assert.NotEmpty(t, newMnemonic2)
+	assert.NotEqual(t, newMnemonic1, newMnemonic2)
+	v.Lock()
+
+	// newMnemonic1 should no longer work
+	_, err = v.UnlockWithRecovery(newMnemonic1)
+	assert.Error(t, err)
+
+	// newMnemonic2 should work
+	_, err = v.UnlockWithRecovery(newMnemonic2)
+	require.NoError(t, err)
+	assert.False(t, v.IsLocked())
+	v.Lock()
+}
+
+func TestValidateRecovery(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	// Valid mnemonic should pass
+	err = v.ValidateRecovery(result.Mnemonic)
+	assert.NoError(t, err)
+
+	// Vault should remain locked (non-destructive)
+	assert.True(t, v.IsLocked())
+
+	// Invalid mnemonic should fail
+	err = v.ValidateRecovery("invalid mnemonic phrase here")
+	assert.Error(t, err)
+
+	// Original mnemonic should still work (no rotation happened)
+	err = v.ValidateRecovery(result.Mnemonic)
+	assert.NoError(t, err)
+}
+
+func TestValidateRecoveryDoesNotRotate(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	// Validate multiple times — key should NOT rotate
+	for i := 0; i < 3; i++ {
+		err = v.ValidateRecovery(result.Mnemonic)
+		require.NoError(t, err, "validation %d should succeed", i)
+	}
+
+	// Now actually unlock with recovery — should still work with original mnemonic
+	newMnemonic, err := v.UnlockWithRecovery(result.Mnemonic)
+	require.NoError(t, err)
+	assert.False(t, v.IsLocked())
+	assert.NotEmpty(t, newMnemonic)
+
+	// Original mnemonic should now be invalid (rotation happened)
+	v.Lock()
+	err = v.ValidateRecovery(result.Mnemonic)
+	assert.Error(t, err, "original mnemonic should be invalid after rotation")
+
+	// New mnemonic should work
+	err = v.ValidateRecovery(newMnemonic)
+	assert.NoError(t, err)
+}
 
 func TestLockEncryptsIndexUnlockDecrypts(t *testing.T) {
 	dir := testVaultDir(t)
@@ -776,7 +872,7 @@ func TestUnlockWithRecoveryDecryptsIndex(t *testing.T) {
 	assert.True(t, index.IsEncrypted(indexPath))
 
 	// Unlock with recovery decrypts
-	err = v.UnlockWithRecovery(result.Mnemonic)
+	_, err = v.UnlockWithRecovery(result.Mnemonic)
 	require.NoError(t, err)
 	assert.False(t, index.IsEncrypted(indexPath))
 	v.Lock()

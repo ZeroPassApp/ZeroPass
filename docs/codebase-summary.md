@@ -85,13 +85,13 @@ Encrypted Item
 |--------|-----------------|
 | `types/types.go` | Item, EncryptedItem, ItemFilter, ItemType constants (login, apikey, sshkey, note, creditcard, identity, custom) |
 | `item/item.go` | Item CRUD manager: auto encrypt/decrypt, per-item keys, checksums, versioning metadata |
-| `store/store.go` | Vault lifecycle: Create, Open, Unlock (password/recovery), Lock, auto-lock on timeout |
+| `store/store.go` | Vault lifecycle: Create, Open, Unlock (password/recovery), Lock, auto-lock on timeout, `ValidateRecovery()` (non-destructive mnemonic check), `UnlockWithRecovery()` (auto-rotates recovery key per PRD §8.5) |
 | `index/index.go` | SQLite FTS5 full-text search with query sanitization (prevent injection) |
 | `version/version.go` | Item version history tracking ({id}.versions.json files) |
 | `health/health.go` | Password health analyzer (weak, reused, old passwords, entropy analysis) |
 | `health/hibp.go` | Haveibeenpwned integration (k-anonymity: only first 5 chars of SHA-1 sent) |
-| `importexport/import.go` | Import from Chrome, Firefox, 1Password, Bitwarden, CSV files |
-| `importexport/export.go` | Export vault: JSON (structured), CSV (tabular), encrypted PGP archive |
+| `importexport/import.go` | Import from 9 sources: Chrome, Firefox, Safari, 1Password (CSV), 1PUX, Bitwarden, LastPass, KeePass, generic CSV |
+| `importexport/export.go` | Export vault: JSON (structured), CSV (tabular), encrypted archive |
 
 **Vault Lifecycle:**
 ```
@@ -216,9 +216,9 @@ Client: Re-pull and merge if conflicts detected
 | `delete` | Delete credential (with confirmation) |
 | `generate` | Generate password or passphrase (`--length=32`, `--type=passphrase`) |
 | `health` | Password health report (weak, reused, old) |
-| `recovery` | Manage recovery: validate, test, regenerate mnemonic |
-| `import` | Import from other PMs (Chrome, Firefox, 1Password, Bitwarden, CSV) |
-| `export` | Export vault (json, csv, encrypted) |
+| `recovery` | Manage recovery: validate (`ValidateRecovery`), test, regenerate mnemonic; auto-rotates on recovery unlock |
+| `import` | Import from other PMs (Chrome, Firefox, Safari, 1Password, 1PUX, Bitwarden, LastPass, KeePass, CSV) |
+| `export` | Export vault (json, csv, encrypted); `--force` flag skips plaintext warning |
 | `run` | Inject secrets via `.env` file (`zp run -- npm start`) |
 | `env` | Environment management (dev/staging/prod tagging) |
 
@@ -409,6 +409,6 @@ v.Create(password)
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** April 1, 2026  
+**Document Version:** 1.1  
+**Last Updated:** June 2025  
 **Lines of Code:** ~20,000 (excluding tests)

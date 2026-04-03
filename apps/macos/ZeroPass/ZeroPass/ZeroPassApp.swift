@@ -16,6 +16,7 @@ struct ZeroPassApp: App {
     @AppStorage("quickSearchModifiers") private var quickSearchModifiers: Int = Int(HotkeyService.Hotkey.quickSearchDefault.modifiers)
     @AppStorage("showMenuBar") private var showMenuBar: Bool = true
     @AppStorage("appearanceMode") private var appearanceMode: String = "system"
+    @AppStorage("highContrastMode") private var highContrastMode: Bool = false
 
     private var preferredColorScheme: ColorScheme? {
         switch appearanceMode {
@@ -31,6 +32,8 @@ struct ZeroPassApp: App {
                 .environmentObject(vault)
                 .environmentObject(quickSearch)
                 .preferredColorScheme(preferredColorScheme)
+                .environment(\.legibilityWeight, highContrastMode ? .bold : nil)
+                .contrast(highContrastMode ? 0.15 : 0)
                 .onAppear {
                     NotificationService.shared.requestAuthorizationIfNeeded()
 

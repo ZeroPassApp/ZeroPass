@@ -17,10 +17,12 @@ struct SidebarView: View {
                 Label("All Items", systemImage: "tray.full")
                     .badge(vault.items.count)
                     .tag(SidebarCategory.all)
+                    .accessibilityLabel("All Items, \(vault.items.count) items")
 
                 Label("Favorites", systemImage: "star.fill")
                     .badge(vault.favoriteCount)
                     .tag(SidebarCategory.favorites)
+                    .accessibilityLabel("Favorites, \(vault.favoriteCount) items")
             }
 
             Section("Categories") {
@@ -29,6 +31,7 @@ struct SidebarView: View {
                         .foregroundStyle(type.color, .primary)
                         .badge(vault.count(for: type))
                         .tag(SidebarCategory.type(type))
+                        .accessibilityLabel("\(type.displayName), \(vault.count(for: type)) items")
                 }
             }
 
@@ -37,10 +40,13 @@ struct SidebarView: View {
                     ForEach(vault.allTags, id: \.self) { tag in
                         Label(tag, systemImage: "tag")
                             .tag(SidebarCategory.tag(tag))
+                            .accessibilityLabel("Tag: \(tag)")
                     }
                 }
             }
         }
         .listStyle(.sidebar)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Vault categories")
     }
 }

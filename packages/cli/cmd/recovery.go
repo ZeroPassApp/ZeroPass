@@ -90,10 +90,9 @@ func runRecovery(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid mnemonic phrase")
 	}
 
-	if err := v.UnlockWithRecovery(mnemonic); err != nil {
+	if err := v.ValidateRecovery(mnemonic); err != nil {
 		return fmt.Errorf("recovery phrase does not match this vault: %w", err)
 	}
-	defer v.Lock()
 
 	if flagOutput == "json" {
 		formatOutput(map[string]string{"status": "valid", "message": "Recovery phrase is valid for this vault"})

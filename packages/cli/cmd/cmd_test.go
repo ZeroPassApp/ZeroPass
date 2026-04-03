@@ -877,7 +877,7 @@ func TestRecoveryMnemonicValidation(t *testing.T) {
 	v2, err := store.Open(vaultPath)
 	require.NoError(t, err)
 
-	err = v2.UnlockWithRecovery(result.Mnemonic)
+	_, err = v2.UnlockWithRecovery(result.Mnemonic)
 	require.NoError(t, err)
 	assert.False(t, v2.IsLocked())
 	v2.Lock()
@@ -886,7 +886,7 @@ func TestRecoveryMnemonicValidation(t *testing.T) {
 	v3, err := store.Open(vaultPath)
 	require.NoError(t, err)
 
-	err = v3.UnlockWithRecovery("invalid mnemonic phrase that does not work at all")
+	_, err = v3.UnlockWithRecovery("invalid mnemonic phrase that does not work at all")
 	assert.Error(t, err)
 }
 
@@ -2178,7 +2178,7 @@ func TestRecoveryMnemonic_FullCycle(t *testing.T) {
 	// Recover with mnemonic
 	v2, err := store.Open(vaultPath)
 	require.NoError(t, err)
-	err = v2.UnlockWithRecovery(result.Mnemonic)
+	_, err = v2.UnlockWithRecovery(result.Mnemonic)
 	require.NoError(t, err)
 	assert.False(t, v2.IsLocked())
 
@@ -4014,15 +4014,18 @@ func TestRunExport_JSON(t *testing.T) {
 	origOutput := flagOutput
 	origFormat := exportFormat
 	origFile := exportOutputFile
+	origForce := exportForce
 	flagVaultPath = vaultPath
 	flagOutput = "text"
 	exportFormat = "json"
 	exportOutputFile = ""
+	exportForce = true
 	defer func() {
 		flagVaultPath = origPath
 		flagOutput = origOutput
 		exportFormat = origFormat
 		exportOutputFile = origFile
+		exportForce = origForce
 	}()
 
 	cleanup := pipeStdin(t, testMasterPassword)
@@ -4047,15 +4050,18 @@ func TestRunExport_CSV(t *testing.T) {
 	origOutput := flagOutput
 	origFormat := exportFormat
 	origFile := exportOutputFile
+	origForce := exportForce
 	flagVaultPath = vaultPath
 	flagOutput = "text"
 	exportFormat = "csv"
 	exportOutputFile = ""
+	exportForce = true
 	defer func() {
 		flagVaultPath = origPath
 		flagOutput = origOutput
 		exportFormat = origFormat
 		exportOutputFile = origFile
+		exportForce = origForce
 	}()
 
 	cleanup := pipeStdin(t, testMasterPassword)
@@ -4079,15 +4085,18 @@ func TestRunExport_ToFile(t *testing.T) {
 	origOutput := flagOutput
 	origFormat := exportFormat
 	origFile := exportOutputFile
+	origForce := exportForce
 	flagVaultPath = vaultPath
 	flagOutput = "text"
 	exportFormat = "json"
 	exportOutputFile = outFile
+	exportForce = true
 	defer func() {
 		flagVaultPath = origPath
 		flagOutput = origOutput
 		exportFormat = origFormat
 		exportOutputFile = origFile
+		exportForce = origForce
 	}()
 
 	cleanup := pipeStdin(t, testMasterPassword)
@@ -4114,6 +4123,7 @@ func TestRunExport_Encrypted(t *testing.T) {
 	origOutput := flagOutput
 	origFormat := exportFormat
 	origFile := exportOutputFile
+	origForce := exportForce
 	flagVaultPath = vaultPath
 	flagOutput = "text"
 	exportFormat = "encrypted"
@@ -4123,6 +4133,7 @@ func TestRunExport_Encrypted(t *testing.T) {
 		flagOutput = origOutput
 		exportFormat = origFormat
 		exportOutputFile = origFile
+		exportForce = origForce
 	}()
 
 	cleanup := pipeStdin(t, testMasterPassword)
@@ -4144,13 +4155,16 @@ func TestRunExport_UnknownFormat(t *testing.T) {
 	origPath := flagVaultPath
 	origFormat := exportFormat
 	origFile := exportOutputFile
+	origForce := exportForce
 	flagVaultPath = vaultPath
 	exportFormat = "xml"
 	exportOutputFile = ""
+	exportForce = true
 	defer func() {
 		flagVaultPath = origPath
 		exportFormat = origFormat
 		exportOutputFile = origFile
+		exportForce = origForce
 	}()
 
 	cleanup := pipeStdin(t, testMasterPassword)
@@ -5384,15 +5398,18 @@ func TestRunExport_ToStdout(t *testing.T) {
 	origFormat := exportFormat
 	origFile := exportOutputFile
 	origOutput := flagOutput
+	origForce := exportForce
 	flagVaultPath = vaultPath
 	exportFormat = "json"
 	exportOutputFile = "" // stdout
+	exportForce = true
 	flagOutput = "json"
 	defer func() {
 		flagVaultPath = origVault
 		exportFormat = origFormat
 		exportOutputFile = origFile
 		flagOutput = origOutput
+		exportForce = origForce
 	}()
 
 	cleanup := pipeStdin(t, testMasterPassword)
@@ -6068,6 +6085,242 @@ func TestRunImport_EmptyCSV(t *testing.T) {
 
 	err = runImport(importCmd, nil)
 	require.NoError(t, err)
+}
+
+// ---------- runImport: Safari, LastPass, KeePass, 1PUX CLI wiring ----------
+
+func TestRunImport_SafariSuccess(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	csvContent := "Title,URL,Username,Password,Notes,OTPAuth\nGitHub,https://github.com,safaruser,safarpass,notes,\n"
+	csvFile := filepath.Join(dir, "safari.csv")
+	require.NoError(t, os.WriteFile(csvFile, []byte(csvContent), 0644))
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	flagOutput = "json"
+	importFrom = "safari"
+	importFile = csvFile
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runImport(importCmd, nil)
+		require.NoError(t, err)
+	})
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, float64(1), result["imported"])
+}
+
+func TestRunImport_LastPassSuccess(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	csvContent := "url,username,password,totp,extra,name,grouping,fav\nhttps://lp.example.com,lpuser,lppass,,notes,LastPass Site,Folder,0\n"
+	csvFile := filepath.Join(dir, "lastpass.csv")
+	require.NoError(t, os.WriteFile(csvFile, []byte(csvContent), 0644))
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	flagOutput = "json"
+	importFrom = "lastpass"
+	importFile = csvFile
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runImport(importCmd, nil)
+		require.NoError(t, err)
+	})
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, float64(1), result["imported"])
+}
+
+func TestRunImport_KeePassSuccess(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	csvContent := "Group,Title,Username,Password,URL,Notes\nInternet,KeePass Site,kpuser,kppass,https://kp.example.com,\n"
+	csvFile := filepath.Join(dir, "keepass.csv")
+	require.NoError(t, os.WriteFile(csvFile, []byte(csvContent), 0644))
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	flagOutput = "json"
+	importFrom = "keepass"
+	importFile = csvFile
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runImport(importCmd, nil)
+		require.NoError(t, err)
+	})
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, float64(1), result["imported"])
+}
+
+func TestRunImport_1PUXSuccess(t *testing.T) {
+	dir := t.TempDir()
+	vaultPath := filepath.Join(dir, "import-vault")
+	v, _, err := store.Create(testMasterPassword, vaultPath, store.DefaultConfig())
+	require.NoError(t, err)
+	v.Lock()
+
+	puxJSON := `{"accounts":[{"vaults":[{"items":[{"item":{"uuid":"t1","typeName":"001","title":"1PUX Site","overview":{},"details":{"loginFields":[{"designation":"username","value":"puxuser"},{"designation":"password","value":"puxpass"}]}}}]}]}]}`
+	puxFile := filepath.Join(dir, "export.1pux")
+	require.NoError(t, os.WriteFile(puxFile, []byte(puxJSON), 0644))
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFrom := importFrom
+	origFile := importFile
+	flagVaultPath = vaultPath
+	flagOutput = "json"
+	importFrom = "1pux"
+	importFile = puxFile
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		importFrom = origFrom
+		importFile = origFile
+	}()
+
+	cleanup := pipeStdin(t, testMasterPassword)
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	output := captureStdoutResult(t, func() {
+		err := runImport(importCmd, nil)
+		require.NoError(t, err)
+	})
+
+	var result map[string]interface{}
+	require.NoError(t, json.Unmarshal([]byte(output), &result))
+	assert.Equal(t, float64(1), result["imported"])
+}
+
+// ---------- runExport: Warning prompt / --force flag ----------
+
+func TestRunExport_WarningCancelled(t *testing.T) {
+	vaultPath := createVaultWithItems(t)
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFormat := exportFormat
+	origFile := exportOutputFile
+	origForce := exportForce
+	flagVaultPath = vaultPath
+	flagOutput = "text"
+	exportFormat = "json"
+	exportOutputFile = ""
+	exportForce = false
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		exportFormat = origFormat
+		exportOutputFile = origFile
+		exportForce = origForce
+	}()
+
+	// Pipe "n" to decline the warning prompt
+	cleanup := pipeStdin(t, testMasterPassword+"\nn\n")
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	err := runExport(exportCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "export cancelled")
+}
+
+func TestRunExport_EncryptedSkipsWarning(t *testing.T) {
+	vaultPath := createVaultWithItems(t)
+	outFile := filepath.Join(t.TempDir(), "export.enc")
+
+	origPath := flagVaultPath
+	origOutput := flagOutput
+	origFormat := exportFormat
+	origFile := exportOutputFile
+	origForce := exportForce
+	flagVaultPath = vaultPath
+	flagOutput = "text"
+	exportFormat = "encrypted"
+	exportOutputFile = outFile
+	exportForce = false // force=false but encrypted should skip warning
+	defer func() {
+		flagVaultPath = origPath
+		flagOutput = origOutput
+		exportFormat = origFormat
+		exportOutputFile = origFile
+		exportForce = origForce
+	}()
+
+	// Pipe password + encryption password (no "y" for warning — shouldn't be asked)
+	cleanup := pipeStdin(t, testMasterPassword+"\nencpass\nencpass\n")
+	defer cleanup()
+	cleanStderr := suppressStderr(t)
+	defer cleanStderr()
+
+	err := runExport(exportCmd, nil)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(outFile)
+	require.NoError(t, err)
+	assert.True(t, len(data) > 0)
 }
 
 // ---------- runRun additional error paths ----------

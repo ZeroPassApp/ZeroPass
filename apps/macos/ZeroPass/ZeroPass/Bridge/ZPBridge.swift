@@ -16,6 +16,10 @@ enum ZPBridge {
         let vaultKeyBase64: String
     }
 
+    struct UnlockWithRecoveryResponse: Codable {
+        let newMnemonic: String
+    }
+
     struct RegenerateRecoveryResponse: Codable {
         let mnemonic: String
     }
@@ -178,11 +182,11 @@ enum ZPBridge {
         _ = try dataFromResult(res)
     }
 
-    static func unlockWithRecovery(handle: Handle, mnemonic: String) throws {
+    static func unlockWithRecovery(handle: Handle, mnemonic: String) throws -> String {
         let res: ZPResult = withMutableCString(mnemonic) { m in
             ZPUnlockWithRecovery(handle, m)
         }
-        _ = try dataFromResult(res)
+        return try decode(UnlockWithRecoveryResponse.self, from: res).newMnemonic
     }
 
     static func unlockWithKey(handle: Handle, vaultKeyBase64: String) throws {
@@ -322,10 +326,81 @@ enum ZPBridge {
         _ = try dataFromResult(res)
     }
 
+    static func exportCSV(handle: Handle, path: String) throws {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPExportCSV(handle, p)
+        }
+        _ = try dataFromResult(res)
+    }
+
     @discardableResult
     static func importCSV(handle: Handle, path: String) throws -> Int {
         let res: ZPResult = withMutableCString(path) { p in
             ZPImportCSV(handle, p)
+        }
+        return try decode(ImportResponse.self, from: res).imported
+    }
+
+    @discardableResult
+    static func importChrome(handle: Handle, path: String) throws -> Int {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPImportChrome(handle, p)
+        }
+        return try decode(ImportResponse.self, from: res).imported
+    }
+
+    @discardableResult
+    static func importFirefox(handle: Handle, path: String) throws -> Int {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPImportFirefox(handle, p)
+        }
+        return try decode(ImportResponse.self, from: res).imported
+    }
+
+    @discardableResult
+    static func importSafari(handle: Handle, path: String) throws -> Int {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPImportSafari(handle, p)
+        }
+        return try decode(ImportResponse.self, from: res).imported
+    }
+
+    @discardableResult
+    static func import1Password(handle: Handle, path: String) throws -> Int {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPImport1Password(handle, p)
+        }
+        return try decode(ImportResponse.self, from: res).imported
+    }
+
+    @discardableResult
+    static func import1PUX(handle: Handle, path: String) throws -> Int {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPImport1PUX(handle, p)
+        }
+        return try decode(ImportResponse.self, from: res).imported
+    }
+
+    @discardableResult
+    static func importBitwarden(handle: Handle, path: String) throws -> Int {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPImportBitwarden(handle, p)
+        }
+        return try decode(ImportResponse.self, from: res).imported
+    }
+
+    @discardableResult
+    static func importLastPass(handle: Handle, path: String) throws -> Int {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPImportLastPass(handle, p)
+        }
+        return try decode(ImportResponse.self, from: res).imported
+    }
+
+    @discardableResult
+    static func importKeePass(handle: Handle, path: String) throws -> Int {
+        let res: ZPResult = withMutableCString(path) { p in
+            ZPImportKeePass(handle, p)
         }
         return try decode(ImportResponse.self, from: res).imported
     }

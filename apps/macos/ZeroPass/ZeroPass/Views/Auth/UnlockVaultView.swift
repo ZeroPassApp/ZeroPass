@@ -10,6 +10,9 @@ struct UnlockVaultView: View {
     @State private var showError = false
     @State private var errorMessage = ""
 
+    private enum Field { case password, mnemonic }
+    @FocusState private var focusedField: Field?
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
@@ -18,6 +21,7 @@ struct UnlockVaultView: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 48))
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
 
                 VStack(spacing: 4) {
                     Text("Unlock Vault")
@@ -33,10 +37,14 @@ struct UnlockVaultView: View {
                     if useRecovery {
                         TextField("Recovery phrase", text: $mnemonic)
                             .textFieldStyle(.roundedBorder)
+                            .focused($focusedField, equals: .mnemonic)
+                            .accessibilityLabel("Recovery phrase")
                     } else {
                         SecureField("Master Password", text: $password)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { unlock() }
+                            .focused($focusedField, equals: .password)
+                            .accessibilityLabel("Master password")
                     }
 
                     Toggle("Use recovery phrase", isOn: $useRecovery)
@@ -55,6 +63,7 @@ struct UnlockVaultView: View {
                     .controlSize(.large)
                     .keyboardShortcut(.defaultAction)
                     .disabled(isBusy || (useRecovery ? mnemonic.isEmpty : password.isEmpty))
+                    .accessibilityLabel("Unlock vault")
 
                     if !useRecovery, vault.biometricUnlockEnabled, vault.isBiometricAvailable {
                         Button {
@@ -65,6 +74,7 @@ struct UnlockVaultView: View {
                         }
                         .controlSize(.large)
                         .disabled(isBusy)
+                        .accessibilityLabel("Unlock with Touch ID")
                     }
                 }
             }
@@ -79,8 +89,15 @@ struct UnlockVaultView: View {
             .buttonStyle(.plain)
             .disabled(isBusy)
             .padding(.bottom, 16)
+            .accessibilityLabel("Close vault")
         }
         .frame(minWidth: 480, minHeight: 360)
+        .onAppear {
+            focusedField = useRecovery ? .mnemonic : .password
+        }
+        .onChange(of: useRecovery) { _, newValue in
+            focusedField = newValue ? .mnemonic : .password
+        }
         .alert("Unlock Failed", isPresented: $showError) {
             Button("OK", role: .cancel) {}
         } message: {

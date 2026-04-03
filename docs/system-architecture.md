@@ -138,7 +138,26 @@ User loses master password
   ├─ AES-256-GCM.decrypt(Vault Key, Recovery Key)
   │  Produces: Plaintext Vault Key
   │
-  └─ (Now can proceed with item decryption using recovered Vault Key)
+  ├─ (Now can proceed with item decryption using recovered Vault Key)
+  │
+  └─ Auto-rotation (PRD §8.5: one-time use):
+     ├─ Generate new BIP-39 mnemonic + new recovery key
+     ├─ Re-encrypt vault key under new recovery key
+     ├─ Return new mnemonic — user MUST save it
+     └─ Previous mnemonic is invalidated
+```
+
+### Recovery Validation (Non-Destructive)
+
+```
+User wants to verify they still have the correct mnemonic
+  │
+  ├─ ValidateRecovery(mnemonic)
+  │  ├─ Derive recovery key from mnemonic
+  │  ├─ Attempt to decrypt vault key
+  │  └─ Return success/error WITHOUT unlocking vault
+  │
+  └─ No side effects: vault remains locked, recovery key is NOT rotated
 ```
 
 ---
@@ -170,6 +189,9 @@ User loses master password
   │ • Search index live    │ (manual lock or timeout)
   │ • Auto-lock per vault config (default 15 min) │
   └────────────────────────┘
+
+  Note: UnlockWithRecovery(mnemonic) auto-rotates the recovery key
+  and returns a NEW mnemonic. The old mnemonic is invalidated (one-time use).
 ```
 
 > Bridge note: the CGO bridge disables the Go auto-lock timer at runtime (`DisableAutoLock()`); the host app is responsible for inactivity locking.
@@ -571,6 +593,6 @@ CREATE TABLE devices (
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** April 1, 2026  
+**Document Version:** 1.1  
+**Last Updated:** June 2025  
 **Owner:** Architecture Team

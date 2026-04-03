@@ -17,6 +17,8 @@ struct MainShellView: View {
             SidebarView(selectedCategory: $selectedCategory)
                 .environmentObject(vault)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 200)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Sidebar")
         } content: {
             ItemListView(
                 category: selectedCategory,
@@ -25,6 +27,8 @@ struct MainShellView: View {
             )
             .environmentObject(vault)
             .navigationSplitViewColumnWidth(min: 220, ideal: 280)
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Item list")
         } detail: {
             if let item = selectedItem {
                 ItemDetailView(item: item, onEdit: { editingItem = item })

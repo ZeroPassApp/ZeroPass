@@ -66,8 +66,8 @@ Developers face a critical gap in credential management:
 - ✅ Full encryption engine (Argon2id KDF, AES-256-GCM, HKDF per-item keys, BIP-39 recovery)
 - ✅ 7 credential types (login, API key, SSH key, secure note, credit card, identity, custom)
 - ✅ CLI: init, unlock/lock, add, get, edit, delete, search, list, generate, health, recovery
-- ✅ Import from Chrome, Firefox, 1Password, Bitwarden, CSV
-- ✅ Export (JSON, CSV, encrypted PGP)
+- ✅ Import from 9 sources: Chrome, Firefox, Safari, 1Password (CSV), 1PUX, Bitwarden, LastPass, KeePass, generic CSV
+- ✅ Export (JSON, CSV, encrypted) with `--force` flag and plaintext warning
 - ✅ Password health analyzer (weak, reused, old)
 - ✅ HIBP integration (k-anonymity model)
 - ✅ Memory safety (secure wiping, unsafe.Pointer barriers)
@@ -130,13 +130,16 @@ Developers face a critical gap in credential management:
 
 ## Development Phases
 
-### Phase 1: MVP (Q1-Q2 2026) — **TARGET: 90% complete**
+### Phase 1: MVP (Q1-Q2 2026) — **COMPLETE**
 **Goal:** Shippable local vault with crypto engine and CLI
 
 - Local encryption engine (Argon2id, AES-256-GCM, BIP-39)
 - 7 credential types, CRUD operations, FTS5 search
 - 14 CLI commands implemented
-- Import/export (4 formats), password health, HIBP
+- Import/export (9 sources), password health, HIBP
+- Recovery key auto-rotation after recovery unlock (one-time use per PRD §8.5)
+- `ValidateRecovery()` for non-destructive mnemonic validation
+- macOS SwiftUI app with 9-source import, CSV export, accessibility (VoiceOver, keyboard nav, high contrast)
 - Comprehensive test suite, security review
 
 **Milestones:**
@@ -233,13 +236,13 @@ Developers face a critical gap in credential management:
 
 | Phase | Status | ETA | Focus | Deliverables |
 |-------|--------|-----|-------|--------------|
-| 1 (MVP) | ~90% | Week 10 | Local vault + CLI | Vault, crypto, 14 cmds, import/export |
+| 1 (MVP) | ✅ Complete | Done | Local vault + CLI + macOS app | Vault, crypto, 14 cmds, 9-source import/export, macOS SwiftUI app |
 | 2 (Sync) | ~40% | Week 20 | Multi-device sync | Server, delta sync, conflict resolution |
 | 3 (Extensions) | 0% | Week 35 | Browser + passkeys | Extension, web UI, shared vaults |
 | 4 (Mobile/Ent.) | 0% | 2027+ | Complete coverage | Mobile apps, admin dashboard |
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** April 1, 2026  
+**Document Version:** 1.1  
+**Last Updated:** June 2025  
 **Owner:** Product & Engineering

@@ -87,3 +87,37 @@ Important details:
 
 Bridge calls are serialized per vault handle via a mutex inside the session.
 Avoid long-running calls on the UI thread; dispatch to a background queue.
+
+## macOS app (SwiftUI) integration
+
+### Import sources
+
+The macOS app supports importing from all 9 sources via a Settings dropdown
+(`SecuritySettingsView`). Each source maps to a bridge function:
+
+| Source | Bridge function | File format |
+|--------|----------------|-------------|
+| Chrome | `ZPImportChrome` | CSV |
+| Firefox | `ZPImportFirefox` | CSV |
+| Safari | `ZPImportSafari` | CSV |
+| 1Password | `ZPImport1Password` | CSV |
+| 1PUX | `ZPImport1PUX` | 1PUX archive |
+| Bitwarden | `ZPImportBitwarden` | CSV/JSON |
+| LastPass | `ZPImportLastPass` | CSV |
+| KeePass | `ZPImportKeePass` | CSV |
+| Generic CSV | `ZPImportCSV` | CSV |
+
+The Swift-side enum `VaultClient.ImportSource` dispatches to the correct bridge call.
+
+### Export
+
+CSV and JSON exports require the user to type **EXPORT** in a confirmation dialog
+(`SecuritySettingsView`). This prevents accidental plaintext credential exposure.
+
+### Accessibility
+
+The macOS app includes:
+- **VoiceOver labels** — `.accessibilityLabel()` on all interactive elements (sidebar items, toolbar buttons, item rows, field actions)
+- **Accessibility hints** — `.accessibilityHint()` on list items and search results
+- **Keyboard navigation** — `@FocusState` on `CreateVaultView`, `UnlockVaultView`, `ItemEditorView`, `QuickSearchView`
+- **High contrast mode** — Toggle in General Settings (`@AppStorage("highContrastMode")`) applies `.contrast(0.15)` and `.environment(\.legibilityWeight, .bold)` app-wide

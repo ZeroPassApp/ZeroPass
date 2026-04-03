@@ -195,8 +195,9 @@ zeropass list
 # Password health report
 zeropass health
 
-# Export vault
-zeropass export --format=json --output=backup.json
+# Export vault (--force skips plaintext warning for non-encrypted exports)
+zeropass export --format=json --file=backup.json
+zeropass export --format=json --file=backup.json --force
 
 # Generate password
 zeropass generate --length=32
@@ -215,10 +216,17 @@ zeropass lock
 zeropass recovery show
 
 # Import from Bitwarden export
-zeropass import --source=bitwarden --file=bitwarden_export.json
+zeropass import --from=bitwarden --file=bitwarden_export.json
 
-# Export to CSV
-zeropass export --format=csv --output=passwords.csv
+# Import from other sources (safari, lastpass, keepass, 1pux, etc.)
+zeropass import --from=safari --file=safari_passwords.csv
+zeropass import --from=lastpass --file=lastpass_export.csv
+zeropass import --from=keepass --file=keepass_export.csv
+zeropass import --from=1pux --file=1password_export.1pux
+
+# Export to CSV (shows plaintext warning; use --force to skip)
+zeropass export --format=csv --file=passwords.csv
+zeropass export --format=csv --file=passwords.csv --force
 ```
 
 ---
@@ -495,8 +503,9 @@ zeropass sync pull
 # Verify export file is correct format
 file bitwarden_export.json
 
-# Try importing with explicit source
-zeropass import --source=bitwarden --file=bitwarden_export.json
+# Check supported sources
+# Supported: chrome, firefox, safari, 1password, 1pux, bitwarden, lastpass, keepass, csv
+zeropass import --from=bitwarden --file=bitwarden_export.json
 
 # Check logs for specific error
 zeropass import ... --verbose
@@ -593,6 +602,6 @@ export ZEROPASS_DB_URL=postgresql://user:pass@host/zeropass
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** April 1, 2026  
+**Document Version:** 1.1  
+**Last Updated:** June 2025  
 **Owner:** DevOps & Infrastructure

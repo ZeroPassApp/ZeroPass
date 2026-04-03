@@ -319,23 +319,44 @@ func (v *Vault) Unlock(masterPassword string) error {
 	return nil
 }
 
-// UnlockWithRecovery decrypts the vault key using a recovery mnemonic.
-func (v *Vault) UnlockWithRecovery(mnemonic string) error {
+// ValidateRecovery checks if a recovery mnemonic is valid for this vault
+// without unlocking or rotating the recovery key. Read-only operation.
+func (v *Vault) ValidateRecovery(mnemonic string) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
-
-	if !v.locked {
-		return nil
-	}
 
 	encBytes, err := encoding.Base64StdDecode(v.meta.EncryptedRecoveryKey)
 	if err != nil {
 		return fmt.Errorf("decode encrypted recovery key: %w", err)
 	}
 
+	_, err = key.DecryptVaultKeyWithRecovery(&key.EncryptedVaultKey{Ciphertext: encBytes}, mnemonic)
+	if err != nil {
+		return fmt.Errorf("validate recovery: %w", err)
+	}
+
+	return nil
+}
+
+// UnlockWithRecovery decrypts the vault key using a recovery mnemonic.
+// The recovery key is automatically rotated after a successful unlock (PRD: one-time use).
+// Returns the new recovery mnemonic that the user must save.
+func (v *Vault) UnlockWithRecovery(mnemonic string) (newMnemonic string, err error) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	if !v.locked {
+		return "", nil
+	}
+
+	encBytes, err := encoding.Base64StdDecode(v.meta.EncryptedRecoveryKey)
+	if err != nil {
+		return "", fmt.Errorf("decode encrypted recovery key: %w", err)
+	}
+
 	vaultKey, err := key.DecryptVaultKeyWithRecovery(&key.EncryptedVaultKey{Ciphertext: encBytes}, mnemonic)
 	if err != nil {
-		return fmt.Errorf("unlock vault with recovery: %w", err)
+		return "", fmt.Errorf("unlock vault with recovery: %w", err)
 	}
 
 	v.vaultKey = vaultKey
@@ -347,7 +368,15 @@ func (v *Vault) UnlockWithRecovery(mnemonic string) error {
 	// Decrypt index file at rest (best-effort).
 	_ = index.DecryptIndexFile(v.IndexPath(), v.vaultKey)
 
-	return nil
+	// Auto-rotate recovery key (PRD §8.5: one-time use)
+	newMnemonic, err = v.regenerateRecoveryLocked(vaultKey)
+	if err != nil {
+		// Unlock succeeded but rotation failed — vault is usable,
+		// user can manually regenerate via RegenerateRecovery()
+		return "", nil
+	}
+
+	return newMnemonic, nil
 }
 
 // UnlockWithKey unlocks the vault using a raw vault key (e.g. TouchID flow).
@@ -628,16 +657,26 @@ func (v *Vault) RegenerateRecovery() (string, error) {
 		return "", errors.New("vault is locked")
 	}
 
-	mnemonic, encRK, err := key.RegenerateRecoveryKey(v.vaultKey)
+	return v.regenerateRecoveryLocked(v.vaultKey)
+}
+
+// regenerateRecoveryLocked performs recovery key regeneration.
+// Caller must hold v.mu.
+func (v *Vault) regenerateRecoveryLocked(vaultKey []byte) (string, error) {
+	mnemonic, encRK, err := key.RegenerateRecoveryKey(vaultKey)
 	if err != nil {
 		return "", fmt.Errorf("regenerate recovery key: %w", err)
 	}
 
-	v.meta.EncryptedRecoveryKey = encoding.Base64StdEncode(encRK.Ciphertext)
+	newEncKey := encoding.Base64StdEncode(encRK.Ciphertext)
 
-	if err := writeMetadata(v.path, v.meta); err != nil {
+	// Copy-then-commit: only update in-memory state after disk write succeeds
+	metaCopy := *v.meta
+	metaCopy.EncryptedRecoveryKey = newEncKey
+	if err := writeMetadata(v.path, &metaCopy); err != nil {
 		return "", fmt.Errorf("persist metadata: %w", err)
 	}
 
+	v.meta.EncryptedRecoveryKey = newEncKey
 	return mnemonic, nil
 }

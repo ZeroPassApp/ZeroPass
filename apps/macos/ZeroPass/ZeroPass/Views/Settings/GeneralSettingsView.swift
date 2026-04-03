@@ -12,6 +12,7 @@ struct GeneralSettingsView: View {
     @AppStorage("showMenuBar") private var showMenuBar: Bool = true
     @AppStorage("appearanceMode") private var appearanceMode: String = "system"
     @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
+    @AppStorage("highContrastMode") private var highContrastMode: Bool = false
 
     @State private var isRecordingHotkey = false
 
@@ -66,6 +67,9 @@ struct GeneralSettingsView: View {
                     Text("Dark").tag("dark")
                 }
                 .pickerStyle(.segmented)
+
+                Toggle("High contrast", isOn: $highContrastMode)
+                    .help("Increases contrast for better readability")
             }
 
             Section("Notifications") {

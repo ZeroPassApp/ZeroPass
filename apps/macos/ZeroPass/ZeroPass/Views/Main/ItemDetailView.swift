@@ -67,6 +67,7 @@ struct ItemDetailView: View {
                     if item.favorite {
                         Image(systemName: "star.fill")
                             .foregroundStyle(.yellow)
+                            .accessibilityLabel("Favorite")
                     }
                 }
             }
@@ -182,10 +183,12 @@ struct ItemDetailView: View {
                     Text("••••••••••••")
                         .font(.system(.body, design: .monospaced))
                         .foregroundStyle(.secondary)
+                        .accessibilityLabel("\(key), hidden")
                 } else {
                     Text(value)
                         .font(isSensitive ? .system(.body, design: .monospaced) : .body)
                         .textSelection(.enabled)
+                        .accessibilityLabel("\(key), \(value)")
                 }
 
                 Spacer()
@@ -202,6 +205,7 @@ struct ItemDetailView: View {
                     }
                     .buttonStyle(.borderless)
                     .help(isRevealed ? "Hide" : "Reveal")
+                    .accessibilityLabel(isRevealed ? "Hide \(key)" : "Reveal \(key)")
                 }
 
                 Button {
@@ -211,6 +215,7 @@ struct ItemDetailView: View {
                 }
                 .buttonStyle(.borderless)
                 .help("Copy \(key)")
+                .accessibilityLabel("Copy \(key)")
             }
         }
     }

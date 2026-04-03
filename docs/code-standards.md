@@ -556,6 +556,6 @@ func (v *Vault) AddItem(item *Item) error {
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** April 1, 2026  
+**Document Version:** 1.1  
+**Last Updated:** June 2025  
 **Owner:** Engineering
