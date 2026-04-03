@@ -2,11 +2,12 @@
 
 ## Overview
 
-ZeroPass codebase (~20K LOC, ~70 Go files) is organized into three tiers:
+ZeroPass codebase (~20K LOC, ~70 Go files) is organized into four tiers:
 
 1. **Core Layer** (`core/`) — Reusable crypto, vault, and sync engines
-2. **Packages Layer** (`packages/`) — CLI application and planned SDK
-3. **Services Layer** (`services/`) — Self-hosted sync server
+2. **Bridge Layer** (`bridge/`) — CGO C ABI (Go `c-archive`) for native app integration
+3. **Packages Layer** (`packages/`) — CLI application and planned SDK
+4. **Services Layer** (`services/`) — Self-hosted sync server
 
 **Module Structure:**
 ```
@@ -15,6 +16,7 @@ github.com/zeropass/zeropass/
 │   ├── crypto/      # Encryption engine, key management, password generation
 │   ├── vault/       # Vault CRUD, search, versioning, health, import/export
 │   └── sync/        # Delta sync client/server, conflict resolution
+├── bridge/          # CGO bridge (C ABI) for native apps (SwiftUI, etc.)
 ├── packages/
 │   ├── cli/         # CLI application (Cobra-based)
 │   └── sdk/         # SDK (planned, empty)
@@ -108,6 +110,12 @@ Open(vaultPath)
 Unlock(password | recovery_mnemonic)
   → Derive key from password/mnemonic
   → Decrypt vault key
+  → (Best-effort) upgrade/repair vault metadata for key-based unlock
+  → Load items into memory (encrypted)
+  → Build searchable index
+
+UnlockWithKey(vaultKey)
+  → Validate vaultKey against vault metadata (`vault_key_check`)
   → Load items into memory (encrypted)
   → Build searchable index
   
@@ -119,20 +127,25 @@ Lock()
 **Storage Format:**
 ```
 vault/
-├── metadata.json         # Encrypted vault config (Argon2 params, salt, vault key)
-├── index.db             # SQLite FTS5 index (searchable metadata, no plaintext)
-├── {item_id}.json       # Encrypted item (per-item key + AES-256-GCM)
-├── {item_id}.json.sha256 # SHA-256 checksum for integrity
-├── {item_id}.versions.json # Version history metadata
-└── recovery.txt         # BIP-39 12-word mnemonic (printed/secured externally)
+├── vault.json                  # Vault metadata (salt, encrypted keys, vault_key_check, config)
+├── vault.lock                  # Advisory lock (bridge only; held for session lifetime)
+├── index.db                    # SQLite FTS5 index while unlocked (may include plaintext indexed fields)
+├── index.db-wal                # SQLite sidecar (unlocked)
+├── index.db-shm                # SQLite sidecar (unlocked)
+├── index.db.enc                # Encrypted index at rest when locked (plaintext index removed)
+└── items/
+    ├── {item_id}.json          # Encrypted item (base64 ciphertext + checksum)
+    └── {item_id}.versions.json # Encrypted version snapshots (legacy plaintext migrated on read)
 ```
 
 **Key Patterns:**
 - Interface-based DI for storage backends (SwappableStore interface)
 - Auto lock on N minutes of inactivity
 - Versioning for rollback capability
-- FTS5 query sanitization (strip special chars, no wildcards)
-- Per-item encryption prevents bulk decryption from compromised vault key
+- FTS5 query sanitization (strip special chars; user wildcards removed; prefix matching appended internally)
+- Vault metadata writes are atomic (temp + sync + rename) to reduce corruption risk
+- Vault metadata preserves unknown JSON fields for forward/backward compatibility
+- `vault_key_check` enables safe raw-key unlock (`UnlockWithKey`) for future TouchID/keychain flows
 
 ---
 

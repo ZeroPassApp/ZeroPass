@@ -1,13 +1,16 @@
 package store
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zeropass/zeropass/core/crypto/key"
 	"github.com/zeropass/zeropass/core/vault/index"
 )
 
@@ -160,6 +163,7 @@ func TestMetadataPersistence(t *testing.T) {
 	assert.NotEmpty(t, meta.Salt)
 	assert.NotEmpty(t, meta.EncryptedVaultKey)
 	assert.NotEmpty(t, meta.EncryptedRecoveryKey)
+	assert.NotEmpty(t, meta.VaultKeyCheck)
 	assert.False(t, meta.CreatedAt.IsZero())
 
 	// Re-open and verify metadata matches
@@ -168,6 +172,152 @@ func TestMetadataPersistence(t *testing.T) {
 	meta2 := v2.Metadata()
 	assert.Equal(t, meta.Salt, meta2.Salt)
 	assert.Equal(t, meta.EncryptedVaultKey, meta2.EncryptedVaultKey)
+	assert.Equal(t, meta.VaultKeyCheck, meta2.VaultKeyCheck)
+}
+
+func TestUnlockWithKey(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	vk, err := v.VaultKey()
+	require.NoError(t, err)
+	vkCopy := make([]byte, len(vk))
+	copy(vkCopy, vk)
+	v.Lock()
+
+	err = v.UnlockWithKey(vkCopy)
+	require.NoError(t, err)
+	assert.False(t, v.IsLocked())
+}
+
+func TestUnlockWithKeyWrongLength(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	err = v.UnlockWithKey([]byte("short"))
+	assert.Error(t, err)
+	assert.True(t, v.IsLocked())
+}
+
+func TestUnlockWithKeyWrongKey(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	wrongKey := make([]byte, key.VaultKeySize)
+	for i := range wrongKey {
+		wrongKey[i] = byte(i + 1)
+	}
+
+	err = v.UnlockWithKey(wrongKey)
+	assert.Error(t, err)
+	assert.True(t, v.IsLocked())
+}
+
+func TestLegacyVaultUpgradesVaultKeyCheckOnUnlock(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	vk, err := v.VaultKey()
+	require.NoError(t, err)
+	vkCopy := make([]byte, len(vk))
+	copy(vkCopy, vk)
+
+	// Simulate a legacy vault.json that doesn't have vault_key_check.
+	metaPath := filepath.Join(dir, VaultMetaFile)
+	b, err := os.ReadFile(metaPath)
+	require.NoError(t, err)
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(b, &raw))
+	delete(raw, "vault_key_check")
+	b2, err := json.MarshalIndent(raw, "", "  ")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(metaPath, b2, 0600))
+
+	v2, err := Open(dir)
+	require.NoError(t, err)
+	require.NoError(t, v2.Unlock("pass"))
+	v2.Lock()
+
+	require.NoError(t, v2.UnlockWithKey(vkCopy))
+}
+
+func TestVaultKeyCheckRepairsOnUnlock(t *testing.T) {
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+
+	// Corrupt vault_key_check on disk.
+	metaCopy := *v.Metadata()
+	metaCopy.VaultKeyCheck = "not-base64"
+	require.NoError(t, writeMetadata(dir, &metaCopy))
+	v.Lock()
+
+	v2, err := Open(dir)
+	require.NoError(t, err)
+	require.NoError(t, v2.Unlock("pass"))
+
+	vk := make([]byte, len(v2.vaultKey))
+	copy(vk, v2.vaultKey)
+	require.NoError(t, verifyVaultKeyCheck(v2.Metadata().VaultKeyCheck, vk))
+
+	v2.Lock()
+	require.NoError(t, v2.UnlockWithKey(vk))
+}
+
+func TestChangeMasterPassword(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod-based failure injection is not portable on Windows")
+	}
+
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, _, err := Create("oldpass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	origSalt := v.Metadata().Salt
+	origEncVK := v.Metadata().EncryptedVaultKey
+
+	// Make the vault directory read-only to force writeMetadata to fail.
+	require.NoError(t, os.Chmod(dir, 0500))
+	t.Cleanup(func() { _ = os.Chmod(dir, 0700) })
+
+	err = v.ChangeMasterPassword("oldpass", "newpass")
+	assert.Error(t, err)
+	assert.Equal(t, origSalt, v.Metadata().Salt)
+	assert.Equal(t, origEncVK, v.Metadata().EncryptedVaultKey)
+
+	require.NoError(t, os.Chmod(dir, 0700))
+	err = v.ChangeMasterPassword("oldpass", "newpass")
+	require.NoError(t, err)
+
+	v2, err := Open(dir)
+	require.NoError(t, err)
+	assert.Error(t, v2.Unlock("oldpass"))
+	require.NoError(t, v2.Unlock("newpass"))
 }
 
 func TestDoubleUnlock(t *testing.T) {
@@ -447,7 +597,7 @@ func TestWriteMetadataToReadOnlyDir(t *testing.T) {
 	}
 	err := writeMetadata("/nonexistent/path/that/does/not/exist", meta)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "write metadata")
+	assert.Contains(t, err.Error(), "metadata")
 }
 
 func TestCreateMkdirAllFailure(t *testing.T) {

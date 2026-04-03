@@ -6,7 +6,7 @@
 
 ## Overview
 - **Priority:** P0 — blocks all subsequent phases
-- **Status:** Pending
+- **Status:** Done
 - **Description:** Create a Go `bridge/` package that exposes the ZeroPass core API as C-callable functions via `//export`. Uses `c-archive` build mode to produce `libzeropass.a` + `libzeropass.h`.
 
 ## Key Insights
@@ -17,7 +17,7 @@
 - Memory rule: `C.CString()` returns malloc'd memory, caller MUST free via `ZPFree()`
 - **`ZPCreateVault` returns `{handle, mnemonic}`** — Swift MUST free result immediately & zero mnemonic copy
 - **File locking (`flock`)** required for CLI/GUI concurrent vault access — advisory lock on `vault.lock`
-- **Disable Go-side auto-lock** when vault opened via bridge (`AutoLockTimeout=0`); Swift handles auto-lock
+- **Disable Go-side auto-lock** when vault opened via bridge (`vault.DisableAutoLock()` runtime-only); Swift handles auto-lock
 - **Import functions** take `io.Reader` in Go core — bridge must open file, read, import, add items to vault
 - **Export functions** take `io.Writer` in Go core — bridge must create file, get all items, export, close file
 
@@ -50,7 +50,7 @@
 typedef struct {
     char* data;   // JSON string (NULL if no data), caller frees via ZPFree
     char* error;  // Error message (NULL on success), caller frees via ZPFree
-    int   code;   // 0=ok, 1=locked, 2=not_found, 3=auth_failed, 4=internal
+    int   code;   // 0=ok, 1=locked, 2=not_found, 3=auth_failed, 4=internal, 5=busy
 } ZPResult;
 ```
 

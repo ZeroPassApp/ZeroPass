@@ -4,7 +4,8 @@
 
 ### System Requirements
 
-- **OS:** macOS, Linux, or Windows (with Git Bash)
+- **OS (official support):** macOS 14+ (Sonoma and later) or Linux
+- **Windows:** best-effort only (not an official support target yet)
 - **Go:** 1.26.1 or later (download from [golang.org](https://golang.org/dl))
 - **Git:** 2.30+
 - **SQLite3:** Bundled with Go driver (no external installation needed)
@@ -55,6 +56,34 @@ go build -o syncserver ./services/syncserver/
 ./syncserver --version
 ./syncserver --help
 ```
+
+### Build macOS app (SwiftUI)
+
+Prereqs: Xcode (`xcodebuild`, macOS SDK tools like `lipo`), Go (per `go.mod`), and `make`.
+
+```bash
+# Run macOS app tests (no signing)
+xcodebuild test \
+  -project apps/macos/ZeroPass/ZeroPass.xcodeproj \
+  -scheme ZeroPass \
+  -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+# Archive (Release) + create artifacts under dist/macos/
+# (ZeroPass.xcarchive, ZeroPass.zip, ZeroPass.dmg)
+CODE_SIGNING_ALLOWED=NO bash apps/macos/scripts/build.sh
+
+# Signed + notarized release (requires Apple credentials)
+# Recommended once-per-machine setup:
+#   xcrun notarytool store-credentials "zp-notary" --apple-id <id> --team-id <team> --password <app-specific>
+# Then:
+#   NOTARY_KEYCHAIN_PROFILE="zp-notary" NOTARIZE=YES bash apps/macos/scripts/build.sh
+```
+
+Notes:
+- The Xcode project builds the Go bridge as part of the app target via a build phase that runs `make -C bridge build-universal`.
+- Optional packaging scripts live in `apps/macos/scripts/` (e.g. `create-dmg.sh`, `notarize.sh`).
+- Security tradeoff: the project currently sets `ENABLE_USER_SCRIPT_SANDBOXING=NO` to avoid Go cache/mod-cache sandbox issues. Keep this in mind for tighter build isolation.
 
 ### Cross-Compile
 

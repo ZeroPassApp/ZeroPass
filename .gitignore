@@ -14,9 +14,34 @@ go.work.sum
 vendor/
 dist/
 build/
+.build/
 coverage.out
 coverage.html
 *.pem
 *.key
 cli
 syncserver
+
+# bridge build outputs
+bridge/*.a
+bridge/*.h
+bridge/*.tmp
+bridge/bridge
+
+# Xcode
+DerivedData/
+.derivedData-cli/
+.derivedData-release/
+xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+.swiftpm/
+
+# Local app data / dev artifacts
+index.db
+index.db-*
+items/
+vault.json
+vault.lock

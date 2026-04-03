@@ -59,6 +59,7 @@ func (m *Manager) AddItem(item *types.Item) error {
 	if item == nil {
 		return errors.New("item must not be nil")
 	}
+	normalizeItem(item)
 
 	// Auto-detect item type if empty.
 	if item.Type == "" {
@@ -115,6 +116,7 @@ func (m *Manager) UpdateItem(id string, item *types.Item) error {
 	if item == nil {
 		return errors.New("item must not be nil")
 	}
+	normalizeItem(item)
 	if err := validateItem(item); err != nil {
 		return fmt.Errorf("validate: %w", err)
 	}
@@ -163,12 +165,12 @@ func (m *Manager) ListItems(filter types.ItemFilter) ([]*types.Item, error) {
 	entries, err := os.ReadDir(m.itemsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return []*types.Item{}, nil
 		}
 		return nil, fmt.Errorf("read items dir: %w", err)
 	}
 
-	var items []*types.Item
+	items := make([]*types.Item, 0, len(entries))
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || strings.HasSuffix(e.Name(), ".versions.json") {
 			continue
@@ -286,6 +288,7 @@ func (m *Manager) readAndDecrypt(id string) (*types.Item, error) {
 	if err := json.Unmarshal(plaintext, &item); err != nil {
 		return nil, fmt.Errorf("unmarshal item: %w", err)
 	}
+	normalizeItem(&item)
 	return &item, nil
 }
 
@@ -298,6 +301,18 @@ func (m *Manager) versionFilePath(id string) string {
 }
 
 // --- validation ---
+
+func normalizeItem(item *types.Item) {
+	if item.Fields == nil {
+		item.Fields = map[string]string{}
+	}
+	if item.CustomFields == nil {
+		item.CustomFields = map[string]string{}
+	}
+	if item.Tags == nil {
+		item.Tags = []string{}
+	}
+}
 
 func validateItem(item *types.Item) error {
 	if item.Name == "" {

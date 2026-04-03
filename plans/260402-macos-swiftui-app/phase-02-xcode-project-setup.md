@@ -7,8 +7,8 @@
 
 ## Overview
 - **Priority:** P0
-- **Status:** Pending
-- **Description:** Create the Xcode project, integrate `libzeropass.a` static library, and build the Swift bridge wrapper that provides clean, type-safe, async Swift API over the C exports.
+- **Status:** In Progress
+- **Description:** Create the Xcode project, integrate `libzeropass.a` static library, and build the Swift bridge wrapper that provides clean, type-safe, async Swift API over the C exports. (Xcode project scaffold is committed; bridge integration + Swift wrapper still pending.)
 
 ## Design Foundation (from [UI/UX Guideline](./reports/ui-ux-design-guideline.md))
 
@@ -80,24 +80,25 @@ enum DesignTokens {
 
 | File | Description |
 |------|-------------|
-| `macos/ZeroPass.xcodeproj/` | Xcode project |
-| `macos/ZeroPass/ZeroPassApp.swift` | @main entry point with WindowGroup, Settings, MenuBarExtra |
-| `macos/ZeroPass/Bridge/ZeroPassBridge.swift` | Core bridge: `BridgeResult`, `ZeroPassVault` class |
-| `macos/ZeroPass/Bridge/BridgeTypes.swift` | All Codable structs (VaultItem, ItemFilter, HealthReport, etc.) |
-| `macos/ZeroPass/Bridge/BridgeErrors.swift` | `ZeroPassError` enum (locked, notFound, authFailed, internal) |
-| `macos/ZeroPass/Bridge/module.modulemap` | Module map for libzeropass |
-| `macos/ZeroPass/Models/VaultManager.swift` | @Observable main state manager |
-| `macos/ZeroPass/Models/AppSettings.swift` | UserDefaults-backed settings |
-| `macos/ZeroPass/ContentView.swift` | Root view (locked → unlock, unlocked → main) |
-| `macos/ZeroPass/Assets.xcassets` | App icon, accent color |
-| `macos/ZeroPass/ZeroPass.entitlements` | Hardened Runtime entitlements |
-| `macos/Package.swift` | SPM manifest (Sparkle, LaunchAtLogin) |
+| `apps/macos/ZeroPass/ZeroPass.xcodeproj/` | Xcode project |
+| `apps/macos/ZeroPass/ZeroPass/ZeroPassApp.swift` | @main entry point with WindowGroup, Settings, MenuBarExtra |
+| `apps/macos/ZeroPass/ZeroPass/Bridge/ZeroPassBridge.swift` | Core bridge: `BridgeResult`, `ZeroPassVault` class |
+| `apps/macos/ZeroPass/ZeroPass/Bridge/BridgeTypes.swift` | All Codable structs (VaultItem, ItemFilter, HealthReport, etc.) |
+| `apps/macos/ZeroPass/ZeroPass/Bridge/BridgeErrors.swift` | `ZeroPassError` enum (locked, notFound, authFailed, internal, busy) |
+| `apps/macos/ZeroPass/ZeroPass/Bridge/module.modulemap` | Module map for libzeropass |
+| `apps/macos/ZeroPass/ZeroPass/Models/VaultManager.swift` | @Observable main state manager |
+| `apps/macos/ZeroPass/ZeroPass/Models/AppSettings.swift` | UserDefaults-backed settings |
+| `apps/macos/ZeroPass/ZeroPass/ContentView.swift` | Root view (locked → unlock, unlocked → main) |
+| `apps/macos/ZeroPass/ZeroPass/Assets.xcassets` | App icon, accent color |
+| `apps/macos/ZeroPass/ZeroPass/ZeroPass.entitlements` | Hardened Runtime entitlements |
+| `apps/macos/Package.swift` | SPM manifest (Sparkle, LaunchAtLogin) |
 
 ## Implementation Steps
 
 1. Create Xcode project: macOS App, SwiftUI, Swift, deployment target macOS 14.0
-2. Configure project structure matching `macos/ZeroPass/` layout
-3. Add Xcode Build Phase script to invoke `make -C ../bridge build-universal`
+2. Configure project structure matching `apps/macos/ZeroPass/` layout
+3. Add Xcode Build Phase script to invoke (from `apps/macos/ZeroPass`):
+   - `make -C "$SRCROOT/../../../bridge" build-universal`
 4. Link `libzeropass.a` via "Link Binary With Libraries"
 5. Create `module.modulemap` for `ZeroPassCore` module importing `libzeropass.h`
 6. Also link system frameworks: `Security.framework`, `LocalAuthentication.framework`

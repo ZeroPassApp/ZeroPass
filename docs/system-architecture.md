@@ -28,7 +28,7 @@
 │  ┌────────────────────▼────────────────────────────────────┐   │
 │  │  Storage Layer                                          │   │
 │  │  • Encrypted JSON files ({id}.json)                     │   │
-│  │  • SQLite FTS5 index (searchable metadata)              │   │
+│  │  • SQLite FTS5 index (index.db; locked → index.db.enc)  │   │
 │  │  • Version history ({id}.versions.json)                 │   │
 │  └─────────────────────────────────────────────────────────┘   │
 │                                                                 │
@@ -160,17 +160,20 @@ User loses master password
   │ • SQLite index init    │            │
   └────────┬───────────────┘            │
            │                            │
-           │ Unlock(password|recovery)  │
+           │ Unlock(password|recovery|vaultKey)  │
            ▼                            │
   ┌────────────────────────┐            │
   │ Unlocked (Open)        │     ┌──────┴─────┐
   │ • Master key loaded    │────►│  Lock()    │
   │ • Vault key decrypted  │     └────────────┘
   │ • Items decryptable    │
-  │ • Search index live    │ (manual lock or  timeout)
-  │ • Auto-lock in 30 min  │
+  │ • Search index live    │ (manual lock or timeout)
+  │ • Auto-lock per vault config (default 15 min) │
   └────────────────────────┘
 ```
+
+> Bridge note: the CGO bridge disables the Go auto-lock timer at runtime (`DisableAutoLock()`); the host app is responsible for inactivity locking.
+
 
 ---
 
@@ -201,11 +204,9 @@ User: zp add --type=login --name="GitHub" --username="octocat" --password="gener
    └─ Defer ZeroBytes(&ItemKey)
 
 4. Storage
-   ├─ Write {item_id}.json (encrypted binary)
-   ├─ Write {item_id}.json.sha256 (checksum)
-   ├─ Index metadata in SQLite FTS5
-   │  (service name, username, tags searchable but not plaintext)
-   └─ Write {item_id}.versions.json (version 0)
+   ├─ Write {item_id}.json (EncryptedItem JSON wrapper: base64 ciphertext + checksum)
+   ├─ Index derived metadata in SQLite FTS5 (index is encrypted at rest when the vault is locked)
+   └─ Version history ({item_id}.versions.json) is written on update/restore snapshots (encrypted at rest)
 
 5. Return success to CLI
    └─ Display: "Added GitHub (ID: abc-123)"
@@ -223,9 +224,9 @@ User: zp get "GitHub" --copy
    └─ Match item ID: abc-123
 
 2. Load encrypted item
-   ├─ Read {item_id}.json (ciphertext)
-   ├─ Read {item_id}.json.sha256 (expected checksum)
-   └─ Compute SHA-256 to verify integrity
+   ├─ Read {item_id}.json (EncryptedItem JSON)
+   ├─ Decode `data` (base64) → ciphertext bytes
+   └─ Compute SHA-256(ciphertext) and compare to `checksum`
 
 3. Item Decryption
    ├─ Lookup Vault Key (require unlocked vault)
@@ -433,16 +434,16 @@ Server receives push from B at 10:00:10:
 ```json
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
-  "type": "login",
-  "encrypted_payload": "base64(aes-gcm-ciphertext)",
-  "nonce": "base64(init-vector)",
-  "auth_tag": "base64(gcm-auth-tag)",
-  "checksum": "sha256-hex-string",
-  "created_at": "2026-04-01T10:00:00Z",
-  "updated_at": "2026-04-01T10:05:00Z",
-  "tags": ["prod", "critical"]
+  "data": "base64([nonce(12)][ciphertext+gcm_tag])",
+  "version": 1,
+  "checksum": "sha256_hex_of_decoded_data"
 }
 ```
+
+Notes:
+- The plaintext item fields (type/name/fields/notes/tags/...) are inside the encrypted `data` payload.
+- AES-GCM output is stored as `[nonce][ciphertext+tag]` (nonce prepended).
+
 
 ### Plaintext Item (In Memory)
 
@@ -478,27 +479,27 @@ Server receives push from B at 10:00:10:
 }
 ```
 
-### VaultMetadata
+### VaultMetadata (vault.json)
 
 ```json
 {
-  "version": "1",
-  "kdf": {
-    "algorithm": "argon2id",
-    "memory_mib": 64,
-    "iterations": 3,
-    "parallelism": 4,
-    "salt": "base64(...)"
-  },
-  "vault_key_encrypted": "base64(aes-gcm-ciphertext)",
-  "vault_key_nonce": "base64(...)",
-  "vault_key_auth_tag": "base64(...)",
-  "recovery_key_encrypted": "base64(aes-gcm-ciphertext)",
-  "recovery_key_nonce": "base64(...)",
-  "recovery_key_auth_tag": "base64(...)",
-  "created_at": "2026-04-01T10:00:00Z"
+  "salt": "hex(...)",
+  "encrypted_vault_key": "base64(...)",
+  "encrypted_recovery_key": "base64(...)",
+  "vault_key_check": "base64(...)",
+  "created_at": "2026-04-01T10:00:00Z",
+  "config": {
+    "auto_lock_timeout": 900000000000,
+    "clipboard_clear_sec": 30,
+    "max_versions": 10
+  }
 }
 ```
+
+Notes:
+- `vault_key_check` enables validating a raw vault key for `UnlockWithKey` (e.g. TouchID/keychain flows).
+- Vault metadata reads/writes preserve unknown JSON fields (forward/backward compatibility).
+- Vault metadata writes use atomic replace semantics (tmp + sync + rename + best-effort directory sync).
 
 ---
 
@@ -507,16 +508,17 @@ Server receives push from B at 10:00:10:
 ### Local Storage
 
 ```
-~/.zeropass/
-├── metadata.json              # Encrypted vault config
-├── index.db                   # SQLite FTS5 (searchable metadata)
-├── index.db-journal           # SQLite transaction log
-├── index.db-wal               # SQLite write-ahead log (Phase 2+)
-├── 550e8400-...json           # Encrypted item 1
-├── 550e8400-...json.sha256    # Checksum 1
-├── 550e8400-...versions.json  # Version history 1
-├── [more items...]
-└── .zeropass.lock             # Vault lock file (prevents concurrent access)
+~/.zeropass/vaults/default/
+├── vault.json                 # Vault metadata (salt, encrypted keys, vault_key_check, config)
+├── index.db                   # SQLite FTS5 (present while unlocked)
+├── index.db.enc               # Encrypted index at rest (present while locked)
+├── index.db-wal               # SQLite write-ahead log (when unlocked)
+├── index.db-shm               # SQLite shared-memory file (when unlocked)
+├── items/
+│   ├── 550e8400-...json            # Encrypted item 1
+│   ├── 550e8400-...versions.json   # Version history 1 (encrypted at rest)
+│   └── [more items...]
+└── vault.lock                 # Advisory lock used by the CGO bridge (flock)
 ```
 
 ### Server Storage (sync_items)

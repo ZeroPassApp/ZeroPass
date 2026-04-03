@@ -61,6 +61,13 @@ zeropass/
 - **All metadata encrypted** (unlike LastPass)
 - **Memory zeroing** for all sensitive data
 - **HIBP integration** (opt-in, k-anonymity model)
+- **Crash-safe vault metadata** — `vault.json` persisted via atomic replace writes
+- **Forward-compatible vault metadata** — unknown `vault.json` fields preserved on read/write
+
+## Platform Support
+
+- **CLI:** macOS, Linux (x86_64, arm64)
+- **macOS app:** macOS 14+ (Sonoma and later)
 
 ## CLI Commands
 
@@ -103,6 +110,40 @@ go tool cover -html=coverage.out
 # Build CLI
 go build -o zeropass ./packages/cli/
 ```
+
+### macOS app (SwiftUI)
+
+Prereqs: Xcode (for `xcodebuild`/`lipo`), Go (per `go.mod`), and `make`.
+
+Note: Xcode GUI builds may run with a minimal `PATH`. The ZeroPass Xcode target’s build phase exports `PATH` to include common Go install locations (`/opt/homebrew/bin`, `/usr/local/bin`, `/usr/local/go/bin`) so `go` is found. If your Go is installed elsewhere, update the build phase script accordingly.
+
+Security note: the project currently sets `ENABLE_USER_SCRIPT_SANDBOXING=NO` so the bridge build script can access Go’s caches/module downloads. This improves dev UX but increases the blast radius of scripts; revisit if you need stricter build isolation.
+
+```bash
+# Run macOS app unit tests (no signing)
+xcodebuild test \
+  -project apps/macos/ZeroPass/ZeroPass.xcodeproj \
+  -scheme ZeroPass \
+  -destination 'platform=macOS,arch=arm64' \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+
+# Create an unsigned Release archive + artifacts under dist/macos/
+# (ZeroPass.xcarchive, ZeroPass.zip, ZeroPass.dmg)
+CODE_SIGNING_ALLOWED=NO bash apps/macos/scripts/build.sh
+
+# Signed + notarized release (requires Apple credentials)
+# Recommended once-per-machine setup:
+#   xcrun notarytool store-credentials "zp-notary" --apple-id <id> --team-id <team> --password <app-specific>
+# Then:
+#   NOTARY_KEYCHAIN_PROFILE="zp-notary" NOTARIZE=YES bash apps/macos/scripts/build.sh
+```
+
+## CI
+
+GitHub Actions workflow: [`.github/workflows/macos-build.yml`](.github/workflows/macos-build.yml)
+- runs `go test ./...`
+- runs the macOS app tests via `xcodebuild` (no signing)
+- on tags `v*`, archives the macOS app and uploads `dist/macos/ZeroPass.xcarchive` as an artifact
 
 ## Documentation
 
