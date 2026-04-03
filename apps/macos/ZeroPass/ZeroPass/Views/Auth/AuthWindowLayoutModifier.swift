@@ -32,6 +32,8 @@ private struct WindowLayoutObserver: NSViewRepresentable {
             context.coordinator.attach(to: window)
             context.coordinator.currentKind = layout.kind
 
+            layout.applyAppearance(to: window)
+
             guard context.coordinator.lastLayout != layout else { return }
             context.coordinator.lastLayout = layout
 
@@ -86,9 +88,27 @@ private struct AuthWindowLayout: Equatable {
         case unlocked
     }
 
+    private static let authWindowMask: NSWindow.StyleMask = [.borderless]
+    private static let unlockedWindowMask: NSWindow.StyleMask = [
+        .titled,
+        .closable,
+        .miniaturizable,
+        .resizable,
+        .fullSizeContentView
+    ]
+
     let kind: Kind
     let minContentSize: CGSize
     let idealContentSize: CGSize
+
+    private var usesFloatingAuthChrome: Bool {
+        switch kind {
+        case .noVault, .locked, .showingRecovery:
+            return true
+        case .unlocked:
+            return false
+        }
+    }
 
     init(state: VaultClient.State) {
         switch state {
@@ -114,7 +134,13 @@ private struct AuthWindowLayout: Equatable {
     func apply(to window: NSWindow, rememberedUnlockedSize: CGSize?) {
         guard !window.styleMask.contains(.fullScreen) else { return }
 
-        window.contentMinSize = minContentSize
+        if usesFloatingAuthChrome {
+            window.contentMinSize = idealContentSize
+            window.contentMaxSize = idealContentSize
+        } else {
+            window.contentMinSize = minContentSize
+            window.contentMaxSize = CGSize(width: 10_000, height: 10_000)
+        }
 
         let currentSize = window.contentRect(forFrameRect: window.frame).size
         let targetSize: CGSize
@@ -134,7 +160,45 @@ private struct AuthWindowLayout: Equatable {
         }
 
         guard shouldResize(from: currentSize, to: targetSize) else { return }
-        window.setContentSize(targetSize)
+
+        let frameSize = window.frameRect(forContentRect: CGRect(origin: .zero, size: targetSize)).size
+        let currentFrame = window.frame
+        let targetOrigin = CGPoint(
+            x: currentFrame.midX - (frameSize.width / 2),
+            y: currentFrame.midY - (frameSize.height / 2)
+        )
+
+        window.setFrame(CGRect(origin: targetOrigin, size: frameSize), display: true, animate: false)
+    }
+
+    func applyAppearance(to window: NSWindow) {
+        if usesFloatingAuthChrome {
+            if window.styleMask != Self.authWindowMask {
+                window.styleMask = Self.authWindowMask
+            }
+            window.titleVisibility = .hidden
+            window.titlebarAppearsTransparent = false
+            window.isMovableByWindowBackground = true
+            window.backgroundColor = .clear
+            window.isOpaque = false
+            window.hasShadow = false
+        } else {
+            if window.styleMask != Self.unlockedWindowMask {
+                window.styleMask = Self.unlockedWindowMask
+            }
+            window.titleVisibility = .visible
+            window.titlebarAppearsTransparent = false
+            window.isMovableByWindowBackground = false
+            window.backgroundColor = .windowBackgroundColor
+            window.isOpaque = true
+            window.hasShadow = true
+        }
+
+        window.standardWindowButton(.closeButton)?.isHidden = usesFloatingAuthChrome
+        window.standardWindowButton(.miniaturizeButton)?.isHidden = usesFloatingAuthChrome
+        window.standardWindowButton(.zoomButton)?.isHidden = usesFloatingAuthChrome
+
+        window.invalidateShadow()
     }
 
     private func shouldResize(from currentSize: CGSize, to targetSize: CGSize) -> Bool {

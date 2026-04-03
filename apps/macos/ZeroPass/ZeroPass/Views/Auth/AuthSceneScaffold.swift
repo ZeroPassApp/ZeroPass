@@ -131,15 +131,15 @@ struct AuthSceneScaffold<Accessory: View, Content: View, Footer: View>: View {
                     RoundedRectangle(cornerRadius: ZPTheme.radiusXLarge, style: .continuous)
                         .stroke(ZPTheme.authPanelBorder, lineWidth: 1)
                 )
-                .shadow(color: ZPTheme.panelShadow, radius: 20, y: 12)
+                .shadow(color: ZPTheme.panelShadow, radius: 28, y: 14)
             }
-            .padding(ZPTheme.spacing24)
+            .padding(ZPTheme.spacing12)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
     private var backgroundLayer: some View {
-        ZPTheme.authSceneBackground
+        Color.clear
             .ignoresSafeArea()
     }
 

@@ -7,10 +7,10 @@ enum ZPTheme {
 
     // MARK: Colors
 
-    static let authSceneBackground = Color(nsColor: .windowBackgroundColor)
+    static let authSceneBackground = Color.clear
     static let authSceneAccent = Color.accentColor.opacity(0.03)
     static let authPanelBackground = Color(nsColor: .controlBackgroundColor)
-    static let authPanelBorder = Color(nsColor: .separatorColor).opacity(0.55)
+    static let authPanelBorder = Color(nsColor: .separatorColor).opacity(0.42)
     static let authInsetBackground = Color(nsColor: .textBackgroundColor)
     static let authInsetBorder = Color(nsColor: .separatorColor)
 
@@ -29,7 +29,7 @@ enum ZPTheme {
     static let warningFill = warning.opacity(0.12)
     static let errorFill = destructive.opacity(0.10)
 
-    static let panelShadow = Color.black.opacity(0.04)
+    static let panelShadow = Color.black.opacity(0.16)
     static let fieldShadow = Color.black.opacity(0.03)
 
     // MARK: Spacing
