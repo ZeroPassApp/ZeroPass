@@ -131,23 +131,38 @@ struct UnlockVaultView: View {
     }
 
     private var vaultMenu: some View {
-        Menu {
-            Button("Choose Different Vault…") {
-                showOpenVaultSheet = true
+        HStack(spacing: ZPTheme.spacing8) {
+            Button {
+                closeWindow()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(ZPTheme.textSecondary)
+                    .frame(width: 28, height: 28)
             }
+            .buttonStyle(.plain)
+            .background(.quaternary.opacity(0.7), in: RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous))
+            .help("Close window")
+            .accessibilityLabel("Close window")
 
-            Divider()
+            Menu {
+                Button("Choose Different Vault…") {
+                    showOpenVaultSheet = true
+                }
 
-            Button("Close Vault…", role: .destructive) {
-                showCloseConfirmation = true
+                Divider()
+
+                Button("Close Vault…", role: .destructive) {
+                    showCloseConfirmation = true
+                }
+            } label: {
+                Label("Vault", systemImage: "ellipsis.circle")
+                    .font(.callout)
+                    .foregroundStyle(ZPTheme.textSecondary)
             }
-        } label: {
-            Label("Vault", systemImage: "ellipsis.circle")
-                .font(.callout)
-                .foregroundStyle(ZPTheme.textSecondary)
+            .disabled(isBusy)
+            .accessibilityLabel("Vault actions")
         }
-        .disabled(isBusy)
-        .accessibilityLabel("Vault actions")
     }
 
     private var vaultSubtitle: String? {
@@ -258,5 +273,9 @@ struct UnlockVaultView: View {
     private func presentError(_ message: String) {
         errorMessage = message
         shake()
+    }
+
+    private func closeWindow() {
+        NSApp.keyWindow?.close()
     }
 }
