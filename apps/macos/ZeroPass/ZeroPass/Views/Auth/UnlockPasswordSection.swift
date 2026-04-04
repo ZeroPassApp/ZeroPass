@@ -4,6 +4,8 @@ struct UnlockPasswordSection: View {
     @Binding var password: String
     @Binding var showPassword: Bool
 
+    let focusRequestID: UUID
+
     let isBusy: Bool
     let showErrorHighlight: Bool
     let capsLockOn: Bool
@@ -17,46 +19,27 @@ struct UnlockPasswordSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ZPTheme.spacing12) {
             Text("Master Password")
-                .font(.caption)
+                .font(.callout)
                 .fontWeight(.medium)
-                .foregroundStyle(ZPTheme.textSecondary)
+                .foregroundStyle(showErrorHighlight ? ZPTheme.destructive : ZPTheme.textSecondary)
 
-            HStack(spacing: ZPTheme.spacing8) {
-                Group {
-                    if showPassword {
-                        TextField("Enter your master password", text: $password)
-                            .textFieldStyle(.plain)
-                    } else {
-                        SecureField("Enter your master password", text: $password)
-                            .textFieldStyle(.plain)
-                    }
+            Group {
+                if showPassword {
+                    TextField("Enter your master password", text: $password)
+                } else {
+                    SecureField("Enter your master password", text: $password)
                 }
-                .font(.body)
-                .autocorrectionDisabled()
-                .focused($isPasswordFocused)
-                .onSubmit(onSubmit)
-                .accessibilityLabel("Master password")
-
-                Button {
-                    showPassword.toggle()
-                } label: {
-                    Image(systemName: showPassword ? "eye.slash" : "eye")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(ZPTheme.textSecondary)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(showPassword ? "Hide password" : "Show password")
-                .help(showPassword ? "Hide password" : "Show password")
             }
-            .padding(.horizontal, ZPTheme.spacing12)
-            .padding(.vertical, ZPTheme.spacing10)
-            .frame(minHeight: ZPTheme.authFieldHeight)
-            .background(ZPTheme.authInsetBackground, in: RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
-                    .stroke(borderColor, lineWidth: borderWidth)
-            )
-            .shadow(color: ZPTheme.fieldShadow, radius: 2, y: 1)
+            .textFieldStyle(.roundedBorder)
+            .font(.body)
+            .autocorrectionDisabled()
+            .focused($isPasswordFocused)
+            .onSubmit(onSubmit)
+            .accessibilityLabel("Master password")
+
+            Toggle("Show Password", isOn: $showPassword)
+                .disabled(isBusy)
+                .accessibilityLabel("Show password")
 
             if capsLockOn {
                 Label("Caps Lock is on", systemImage: "capslock.fill")
@@ -65,7 +48,7 @@ struct UnlockPasswordSection: View {
             }
 
             if canUseBiometrics {
-                HStack(alignment: .top, spacing: ZPTheme.spacing12) {
+                VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
                     Button {
                         onUnlockWithBiometrics()
                     } label: {
@@ -92,16 +75,10 @@ struct UnlockPasswordSection: View {
                 isPasswordFocused = true
             }
         }
-    }
-
-    private var borderColor: Color {
-        if showErrorHighlight {
-            return ZPTheme.destructive
+        .onChange(of: focusRequestID) { _, _ in
+            DispatchQueue.main.async {
+                isPasswordFocused = true
+            }
         }
-        return isPasswordFocused ? ZPTheme.info : ZPTheme.authInsetBorder
-    }
-
-    private var borderWidth: CGFloat {
-        (showErrorHighlight || isPasswordFocused) ? 1.5 : 1
     }
 }

@@ -8,9 +8,9 @@ struct RecoveryPhraseView: View {
 
     var body: some View {
         AuthSceneScaffold(
-            title: "Recovery Phrase",
-            subtitle: "Save these words in order before continuing.",
-            detail: "This phrase can unlock your vault if you ever lose your master password.",
+            title: "Save Recovery Phrase",
+            subtitle: "Write these words down before you continue.",
+            detail: "You’ll need this phrase if you ever lose your master password.",
             symbolName: "key.horizontal.fill",
             symbolTint: .orange
         ) {
@@ -39,11 +39,12 @@ struct RecoveryPhraseView: View {
                     Button {
                         vault.acceptRecoveryPhrase()
                     } label: {
-                        Text("I Saved My Recovery Phrase")
+                        Text("Continue")
                     }
                     .controlSize(.large)
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.defaultAction)
+                    .accessibilityHint("Continue after you have saved the recovery phrase.")
                 }
             }
         }

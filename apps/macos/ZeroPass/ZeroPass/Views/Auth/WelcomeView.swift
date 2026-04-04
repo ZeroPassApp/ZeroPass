@@ -3,14 +3,10 @@ import SwiftUI
 struct WelcomeView: View {
     @EnvironmentObject var vault: VaultClient
 
-    @State private var showingCreate = false
-    @State private var showingOpen = false
-
     var body: some View {
         AuthSceneScaffold(
             title: "ZeroPass",
-            subtitle: "Local-first, zero-knowledge password manager",
-            detail: "Create a new vault or open an existing one to continue.",
+            subtitle: "Create or open a vault to get started.",
             symbolName: "lock.shield.fill"
         ) {
             VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
@@ -22,28 +18,27 @@ struct WelcomeView: View {
                     )
                 }
 
-                VStack(spacing: ZPTheme.spacing12) {
+                VStack(spacing: ZPTheme.spacing16) {
                     Button {
-                        vault.authFlowError = nil
-                        showingCreate = true
+                        vault.presentCreateVaultSheet()
                     } label: {
-                        Label("Create New Vault", systemImage: "plus.circle.fill")
+                        Text("Create Vault…")
                             .frame(maxWidth: .infinity)
                     }
                     .controlSize(.large)
                     .buttonStyle(.borderedProminent)
-                    .keyboardShortcut("n", modifiers: [.command])
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("welcome.createVaultButton")
 
                     Button {
-                        vault.authFlowError = nil
-                        showingOpen = true
+                        vault.presentOpenVaultSheet()
                     } label: {
-                        Label("Open Existing Vault", systemImage: "folder")
+                        Text("Open Vault…")
                             .frame(maxWidth: .infinity)
                     }
                     .controlSize(.large)
                     .buttonStyle(.bordered)
-                    .keyboardShortcut("o", modifiers: [.command])
+                    .accessibilityIdentifier("welcome.openVaultButton")
                 }
             }
         } footer: {
@@ -54,13 +49,22 @@ struct WelcomeView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .sheet(isPresented: $showingCreate) {
-            CreateVaultView()
-                .environmentObject(vault)
+        .sheet(item: activeAuthModalBinding) { modal in
+            switch modal {
+            case .createVault:
+                CreateVaultView()
+                    .environmentObject(vault)
+            case .openVault:
+                OpenVaultSheet(mode: .openExisting)
+                    .environmentObject(vault)
+            }
         }
-        .sheet(isPresented: $showingOpen) {
-            OpenVaultSheet(mode: .openExisting)
-                .environmentObject(vault)
+        .onChange(of: vault.state) { _, newState in
+            guard vault.activeAuthModal != nil else { return }
+            if case .noVault = newState {
+                return
+            }
+            vault.dismissAuthModal()
         }
     }
 
@@ -71,5 +75,12 @@ struct WelcomeView: View {
         if b.isEmpty { return v }
         if v.isEmpty { return b }
         return "\(v) (\(b))"
+    }
+
+    private var activeAuthModalBinding: Binding<VaultClient.AuthModal?> {
+        Binding(
+            get: { vault.activeAuthModal },
+            set: { vault.activeAuthModal = $0 }
+        )
     }
 }

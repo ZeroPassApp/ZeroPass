@@ -51,6 +51,7 @@ struct UnlockVaultView: View {
                         UnlockPasswordSection(
                             password: $password,
                             showPassword: $showPassword,
+                            focusRequestID: vault.unlockPasswordFocusRequestID,
                             isBusy: isBusy,
                             showErrorHighlight: showErrorHighlight,
                             capsLockOn: capsLockOn,
@@ -100,7 +101,7 @@ struct UnlockVaultView: View {
             }
         }
         .offset(x: shakeOffset)
-        .sheet(isPresented: $showOpenVaultSheet) {
+        .sheet(isPresented: $showOpenVaultSheet, onDismiss: restorePasswordFocusIfNeeded) {
             OpenVaultSheet(mode: .replaceCurrent)
                 .environmentObject(vault)
         }
@@ -131,38 +132,19 @@ struct UnlockVaultView: View {
     }
 
     private var vaultMenu: some View {
-        HStack(spacing: ZPTheme.spacing8) {
-            Button {
-                closeWindow()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(ZPTheme.textSecondary)
-                    .frame(width: 28, height: 28)
+        Menu("Vault") {
+            Button("Choose Different Vault…") {
+                showOpenVaultSheet = true
             }
-            .buttonStyle(.plain)
-            .background(.quaternary.opacity(0.7), in: RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous))
-            .help("Close window")
-            .accessibilityLabel("Close window")
 
-            Menu {
-                Button("Choose Different Vault…") {
-                    showOpenVaultSheet = true
-                }
+            Divider()
 
-                Divider()
-
-                Button("Close Vault…", role: .destructive) {
-                    showCloseConfirmation = true
-                }
-            } label: {
-                Label("Vault", systemImage: "ellipsis.circle")
-                    .font(.callout)
-                    .foregroundStyle(ZPTheme.textSecondary)
+            Button("Close Vault…", role: .destructive) {
+                showCloseConfirmation = true
             }
-            .disabled(isBusy)
-            .accessibilityLabel("Vault actions")
         }
+        .disabled(isBusy)
+        .accessibilityLabel("Vault actions")
     }
 
     private var vaultSubtitle: String? {
@@ -275,7 +257,8 @@ struct UnlockVaultView: View {
         shake()
     }
 
-    private func closeWindow() {
-        NSApp.keyWindow?.close()
+    private func restorePasswordFocusIfNeeded() {
+        guard selectedMethod == .password else { return }
+        vault.requestUnlockPasswordFocus()
     }
 }

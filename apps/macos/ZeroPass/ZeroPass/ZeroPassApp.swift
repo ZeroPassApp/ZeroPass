@@ -10,6 +10,7 @@ import SwiftUI
 
 @main
 struct ZeroPassApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var vault = VaultClient()
     private let quickSearch = QuickSearchPanelController.shared
 
@@ -18,6 +19,9 @@ struct ZeroPassApp: App {
     @AppStorage("showMenuBar") private var showMenuBar: Bool = true
     @AppStorage("appearanceMode") private var appearanceMode: String = "system"
 
+    private var isUITesting: Bool {
+        ProcessInfo.processInfo.arguments.contains("UITEST_MODE")
+    }
 
     private var preferredColorScheme: ColorScheme? {
         switch appearanceMode {
@@ -34,6 +38,10 @@ struct ZeroPassApp: App {
                 .environmentObject(quickSearch)
                 .preferredColorScheme(preferredColorScheme)
                 .onAppear {
+                    guard !isUITesting else {
+                        return
+                    }
+
                     NotificationService.shared.requestAuthorizationIfNeeded()
 
                     HotkeyService.shared.onHotkey = {
@@ -50,8 +58,13 @@ struct ZeroPassApp: App {
         .defaultSize(width: 620, height: 480)
         .commands {
             CommandGroup(after: .newItem) {
-                Button(vault.hasVault ? "Choose Different Vault…" : "Open Existing Vault…") {
-                    chooseVaultFolder(replacingCurrent: vault.hasVault)
+                Button(vault.hasVault ? "Choose Different Vault…" : "Open Vault…") {
+                    if vault.hasVault {
+                        chooseVaultFolder(replacingCurrent: true)
+                    } else {
+                        vault.presentOpenVaultSheet()
+                        appDelegate.revealMainWindowIfNeeded()
+                    }
                 }
                 .keyboardShortcut("o", modifiers: [.command])
 
@@ -130,5 +143,112 @@ struct ZeroPassApp: App {
                 }
             }
         }
+    }
+}
+
+@MainActor
+private final class AppDelegate: NSObject, NSApplicationDelegate {
+    func revealMainWindowIfNeeded() {
+        Task { @MainActor in
+            await ensureMainWindowVisible()
+        }
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        revealMainWindowIfNeeded()
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if bringMainWindowToFrontIfAvailable() {
+            return true
+        }
+
+        openNewWindowFromMenuIfAvailable()
+        return true
+    }
+
+    private func ensureMainWindowVisible() async {
+        NSApp.activate(ignoringOtherApps: true)
+
+        if bringMainWindowToFrontIfAvailable() {
+            return
+        }
+
+        for _ in 0..<10 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if bringMainWindowToFrontIfAvailable() {
+                return
+            }
+        }
+
+        openNewWindowFromMenuIfAvailable()
+
+        for _ in 0..<10 {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            if bringMainWindowToFrontIfAvailable() {
+                return
+            }
+        }
+    }
+
+    private func bringMainWindowToFrontIfAvailable() -> Bool {
+        guard let window = mainWindow else {
+            return false
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.makeKeyAndOrderFront(nil)
+        return true
+    }
+
+    private var mainWindow: NSWindow? {
+        NSApp.windows.first { window in
+            guard window.canBecomeKey else {
+                return false
+            }
+
+            if let identifier = window.identifier?.rawValue, identifier.contains("AppWindow") {
+                return true
+            }
+
+            let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
+                ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
+                ?? "ZeroPass"
+            return window.title == appName
+        }
+    }
+
+    private func openNewWindowFromMenuIfAvailable() {
+        guard
+            let newWindowItem = newWindowMenuItem(in: NSApp.mainMenu),
+            let action = newWindowItem.action
+        else {
+            return
+        }
+
+        _ = NSApp.sendAction(action, to: newWindowItem.target, from: newWindowItem)
+    }
+
+    private func newWindowMenuItem(in menu: NSMenu?) -> NSMenuItem? {
+        guard let menu else {
+            return nil
+        }
+
+        for item in menu.items {
+            if item.submenu == nil,
+               item.keyEquivalent.lowercased() == "n",
+               item.keyEquivalentModifierMask.contains(.command) {
+                return item
+            }
+
+            if let nestedMatch = newWindowMenuItem(in: item.submenu) {
+                return nestedMatch
+            }
+        }
+
+        return nil
     }
 }

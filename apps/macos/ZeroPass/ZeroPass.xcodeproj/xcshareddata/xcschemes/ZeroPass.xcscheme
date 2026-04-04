@@ -34,6 +34,20 @@
                ReferencedContainer = "container:ZeroPass.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D0E113492F7E3B1100AF686C"
+               BuildableName = "ZeroPassUITests.xctest"
+               BlueprintName = "ZeroPassUITests"
+               ReferencedContainer = "container:ZeroPass.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -50,6 +64,16 @@
                BlueprintIdentifier = "D0E1133F2F7E3B1100AF686C"
                BuildableName = "ZeroPassTests.xctest"
                BlueprintName = "ZeroPassTests"
+               ReferencedContainer = "container:ZeroPass.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "D0E113492F7E3B1100AF686C"
+               BuildableName = "ZeroPassUITests.xctest"
+               BlueprintName = "ZeroPassUITests"
                ReferencedContainer = "container:ZeroPass.xcodeproj">
             </BuildableReference>
          </TestableReference>

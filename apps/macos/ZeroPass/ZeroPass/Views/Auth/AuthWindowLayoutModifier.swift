@@ -30,7 +30,7 @@ private struct WindowLayoutObserver: NSViewRepresentable {
         DispatchQueue.main.async {
             guard let window = nsView.window else { return }
             context.coordinator.attach(to: window)
-            context.coordinator.currentKind = layout.kind
+            context.coordinator.isUnlockedLayout = layout.kind == .unlocked
 
             layout.applyAppearance(to: window)
 
@@ -47,7 +47,7 @@ private struct WindowLayoutObserver: NSViewRepresentable {
 
     final class Coordinator {
         var lastLayout: AuthWindowLayout?
-        var currentKind: AuthWindowLayout.Kind = .noVault
+        var isUnlockedLayout = false
         var lastUnlockedSize: CGSize?
 
         private weak var observedWindow: NSWindow?
@@ -73,7 +73,7 @@ private struct WindowLayoutObserver: NSViewRepresentable {
                 queue: .main
             ) { [weak self, weak window] _ in
                 guard let self, let window else { return }
-                guard self.currentKind == .unlocked else { return }
+                guard self.isUnlockedLayout else { return }
                 self.lastUnlockedSize = window.contentRect(forFrameRect: window.frame).size
             }
         }
@@ -88,20 +88,18 @@ private struct AuthWindowLayout: Equatable {
         case unlocked
     }
 
-    private static let authWindowMask: NSWindow.StyleMask = [.borderless]
-    private static let unlockedWindowMask: NSWindow.StyleMask = [
+    private static let authWindowMask: NSWindow.StyleMask = [
         .titled,
         .closable,
         .miniaturizable,
-        .resizable,
-        .fullSizeContentView
+        .resizable
     ]
 
     let kind: Kind
     let minContentSize: CGSize
     let idealContentSize: CGSize
 
-    private var usesFloatingAuthChrome: Bool {
+    private var isCompactAuthState: Bool {
         switch kind {
         case .noVault, .locked, .showingRecovery:
             return true
@@ -114,15 +112,15 @@ private struct AuthWindowLayout: Equatable {
         switch state {
         case .noVault:
             kind = .noVault
-            minContentSize = CGSize(width: 560, height: 420)
-            idealContentSize = CGSize(width: 560, height: 420)
+            minContentSize = CGSize(width: 520, height: 320)
+            idealContentSize = CGSize(width: 560, height: 360)
         case .locked:
             kind = .locked
-            minContentSize = CGSize(width: 560, height: 460)
-            idealContentSize = CGSize(width: 560, height: 460)
+            minContentSize = CGSize(width: 560, height: 420)
+            idealContentSize = CGSize(width: 560, height: 440)
         case .showingRecovery:
             kind = .showingRecovery
-            minContentSize = CGSize(width: 640, height: 520)
+            minContentSize = CGSize(width: 620, height: 480)
             idealContentSize = CGSize(width: 640, height: 520)
         case .unlocked:
             kind = .unlocked
@@ -134,13 +132,8 @@ private struct AuthWindowLayout: Equatable {
     func apply(to window: NSWindow, rememberedUnlockedSize: CGSize?) {
         guard !window.styleMask.contains(.fullScreen) else { return }
 
-        if usesFloatingAuthChrome {
-            window.contentMinSize = idealContentSize
-            window.contentMaxSize = idealContentSize
-        } else {
-            window.contentMinSize = minContentSize
-            window.contentMaxSize = CGSize(width: 10_000, height: 10_000)
-        }
+        window.contentMinSize = minContentSize
+        window.contentMaxSize = CGSize(width: 10_000, height: 10_000)
 
         let currentSize = window.contentRect(forFrameRect: window.frame).size
         let targetSize: CGSize
@@ -172,31 +165,21 @@ private struct AuthWindowLayout: Equatable {
     }
 
     func applyAppearance(to window: NSWindow) {
-        if usesFloatingAuthChrome {
-            if window.styleMask != Self.authWindowMask {
-                window.styleMask = Self.authWindowMask
-            }
-            window.titleVisibility = .hidden
-            window.titlebarAppearsTransparent = false
-            window.isMovableByWindowBackground = true
-            window.backgroundColor = .clear
-            window.isOpaque = false
-            window.hasShadow = false
+        window.styleMask.insert(Self.authWindowMask)
+        if isCompactAuthState {
+            window.styleMask.remove(.fullSizeContentView)
         } else {
-            if window.styleMask != Self.unlockedWindowMask {
-                window.styleMask = Self.unlockedWindowMask
-            }
-            window.titleVisibility = .visible
-            window.titlebarAppearsTransparent = false
-            window.isMovableByWindowBackground = false
-            window.backgroundColor = .windowBackgroundColor
-            window.isOpaque = true
-            window.hasShadow = true
+            window.styleMask.insert(.fullSizeContentView)
         }
 
-        window.standardWindowButton(.closeButton)?.isHidden = usesFloatingAuthChrome
-        window.standardWindowButton(.miniaturizeButton)?.isHidden = usesFloatingAuthChrome
-        window.standardWindowButton(.zoomButton)?.isHidden = usesFloatingAuthChrome
+        window.title = "ZeroPass"
+        window.titleVisibility = .visible
+        window.titlebarAppearsTransparent = false
+        window.isMovableByWindowBackground = false
+        window.backgroundColor = .windowBackgroundColor
+        window.isOpaque = true
+        window.hasShadow = true
+        window.titlebarSeparatorStyle = .automatic
 
         window.invalidateShadow()
     }

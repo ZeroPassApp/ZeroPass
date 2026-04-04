@@ -7,7 +7,7 @@ enum ZPTheme {
 
     // MARK: Colors
 
-    static let authSceneBackground = Color.clear
+    static let authSceneBackground = Color(nsColor: .windowBackgroundColor)
     static let authSceneAccent = Color.accentColor.opacity(0.03)
     static let authPanelBackground = Color(nsColor: .controlBackgroundColor)
     static let authPanelBorder = Color(nsColor: .separatorColor).opacity(0.42)
@@ -56,5 +56,5 @@ enum ZPTheme {
     static let authPanelMaxWidth: CGFloat = 560
     static let authFieldHeight: CGFloat = 40
     static let authEditorMinHeight: CGFloat = 120
-    static let authSheetWidth: CGFloat = 460
+    static let authSheetWidth: CGFloat = 520
 }

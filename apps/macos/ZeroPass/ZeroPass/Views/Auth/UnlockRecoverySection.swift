@@ -14,9 +14,9 @@ struct UnlockRecoverySection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ZPTheme.spacing12) {
             Text("Recovery Phrase")
-                .font(.caption)
+                .font(.callout)
                 .fontWeight(.medium)
-                .foregroundStyle(ZPTheme.textSecondary)
+                .foregroundStyle(showErrorHighlight ? ZPTheme.destructive : ZPTheme.textSecondary)
 
             Text("Paste your 12-, 15-, 18-, 21-, or 24-word recovery phrase. Numbering and line breaks are okay.")
                 .font(.footnote)
@@ -47,7 +47,6 @@ struct UnlockRecoverySection: View {
                 RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
                     .stroke(borderColor, lineWidth: borderWidth)
             )
-            .shadow(color: ZPTheme.fieldShadow, radius: 2, y: 1)
 
             Label(summary.helperText, systemImage: summaryIcon)
                 .font(.caption)

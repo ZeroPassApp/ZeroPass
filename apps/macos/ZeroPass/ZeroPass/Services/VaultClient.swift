@@ -3,6 +3,9 @@ import Combine
 
 @MainActor
 final class VaultClient: ObservableObject {
+    private static let uiTestModeArgument = "UITEST_MODE"
+    private static let uiTestResetStateArgument = "UITEST_RESET_STATE"
+
     enum State: Equatable {
         case noVault
         case locked
@@ -10,7 +13,16 @@ final class VaultClient: ObservableObject {
         case unlocked
     }
 
+    enum AuthModal: String, Identifiable {
+        case createVault
+        case openVault
+
+        var id: String { rawValue }
+    }
+
     @Published private(set) var state: State = .noVault
+    @Published private(set) var unlockPasswordFocusRequestID = UUID()
+    @Published var activeAuthModal: AuthModal?
     @Published var items: [VaultItem] = []
     @Published var selectedItemID: VaultItem.ID?
     @Published var lastError: String?
@@ -95,6 +107,8 @@ final class VaultClient: ObservableObject {
 
     init(keychain: any KeychainStoring = KeychainService()) {
 	    self.keychain = keychain
+        Self.resetStateForUITestsIfNeeded()
+
         if UserDefaults.standard.object(forKey: "biometricUnlockEnabled") == nil {
             self.biometricUnlockEnabled = false
         } else {
@@ -166,6 +180,41 @@ final class VaultClient: ObservableObject {
     }
 
     var isBiometricAvailable: Bool { biometrics.isAvailable() }
+
+    static var isRunningUITests: Bool {
+        ProcessInfo.processInfo.arguments.contains(uiTestModeArgument)
+    }
+
+    private static func resetStateForUITestsIfNeeded() {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains(uiTestModeArgument), arguments.contains(uiTestResetStateArgument) else {
+            return
+        }
+
+        if let bundleIdentifier = Bundle.main.bundleIdentifier {
+            UserDefaults.standard.removePersistentDomain(forName: bundleIdentifier)
+        }
+        BookmarkStore().clear()
+        UserDefaults.standard.synchronize()
+    }
+
+    func requestUnlockPasswordFocus() {
+        unlockPasswordFocusRequestID = UUID()
+    }
+
+    func presentCreateVaultSheet() {
+        authFlowError = nil
+        activeAuthModal = .createVault
+    }
+
+    func presentOpenVaultSheet() {
+        authFlowError = nil
+        activeAuthModal = .openVault
+    }
+
+    func dismissAuthModal() {
+        activeAuthModal = nil
+    }
 
     func restoreLastVaultIfAvailable() async {
         guard state == .noVault else { return }

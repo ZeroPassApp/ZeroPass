@@ -9,19 +9,14 @@ struct OpenVaultSheet: View {
         var title: String {
             switch self {
             case .openExisting:
-                return "Open Existing Vault"
+                return "Open Vault"
             case .replaceCurrent:
                 return "Choose Different Vault"
             }
         }
 
         var actionTitle: String {
-            switch self {
-            case .openExisting:
-                return "Choose Folder…"
-            case .replaceCurrent:
-                return "Choose Different Vault…"
-            }
+            "Choose Folder…"
         }
     }
 
@@ -34,10 +29,11 @@ struct OpenVaultSheet: View {
     @State private var localError: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+        VStack(alignment: .leading, spacing: ZPTheme.spacing20) {
             Text(mode.title)
                 .font(.title2)
                 .fontWeight(.semibold)
+                .accessibilityIdentifier(mode == .openExisting ? "openVault.title" : "replaceVault.title")
 
             Text(descriptionText)
                 .foregroundStyle(ZPTheme.textSecondary)
@@ -57,11 +53,12 @@ struct OpenVaultSheet: View {
                 }
                 .keyboardShortcut(.cancelAction)
                 .disabled(isBusy)
+                .accessibilityIdentifier(mode == .openExisting ? "openVault.cancelButton" : "replaceVault.cancelButton")
 
                 Spacer()
 
                 Button {
-                    chooseFolder()
+                    Task { await chooseFolder() }
                 } label: {
                     HStack(spacing: ZPTheme.spacing8) {
                         if isBusy {
@@ -77,26 +74,21 @@ struct OpenVaultSheet: View {
             }
         }
         .padding(ZPTheme.spacing24)
-        .frame(width: ZPTheme.authSheetWidth)
+        .frame(minWidth: ZPTheme.authSheetWidth, idealWidth: ZPTheme.authSheetWidth)
     }
 
     private var descriptionText: String {
         switch mode {
         case .openExisting:
-            return "Select the folder containing your ZeroPass vault to continue."
+            return "Select the folder containing your ZeroPass vault."
         case .replaceCurrent:
             return "Select another vault folder. ZeroPass will keep your current vault open unless the new vault opens successfully."
         }
     }
 
-    private func chooseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
-
-        guard panel.runModal() == .OK, let url = panel.url else {
+    @MainActor
+    private func chooseFolder() async {
+        guard let url = await VaultFolderPicker.pickDirectory(canCreateDirectories: false) else {
             return
         }
 
@@ -118,5 +110,33 @@ struct OpenVaultSheet: View {
                 localError = error.localizedDescription
             }
         }
+    }
+}
+
+enum VaultFolderPicker {
+    @MainActor
+    static func pickDirectory(canCreateDirectories: Bool) async -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = canCreateDirectories
+
+        return await withCheckedContinuation { continuation in
+            let finish: (NSApplication.ModalResponse) -> Void = { response in
+                continuation.resume(returning: response == .OK ? panel.url : nil)
+            }
+
+            if let targetWindow = presentationWindow() {
+                panel.beginSheetModal(for: targetWindow, completionHandler: finish)
+            } else {
+                finish(panel.runModal())
+            }
+        }
+    }
+
+    @MainActor
+    private static func presentationWindow() -> NSWindow? {
+        NSApp.keyWindow ?? NSApp.mainWindow ?? NSApp.windows.first(where: \.isVisible)
     }
 }

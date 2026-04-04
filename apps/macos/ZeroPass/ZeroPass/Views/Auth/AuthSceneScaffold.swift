@@ -6,6 +6,19 @@ enum AuthMessageTone {
     case warning
     case error
 
+    var accessibilityPrefix: String {
+        switch self {
+        case .info:
+            return "Information"
+        case .success:
+            return "Success"
+        case .warning:
+            return "Warning"
+        case .error:
+            return "Error"
+        }
+    }
+
     var foregroundColor: Color {
         switch self {
         case .info:
@@ -44,6 +57,7 @@ struct AuthMessageView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(tone.foregroundColor)
                 .padding(.top, 1)
+                .accessibilityHidden(true)
 
             Text(text)
                 .font(.callout)
@@ -58,6 +72,8 @@ struct AuthMessageView: View {
             RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
                 .stroke(tone.foregroundColor.opacity(0.18), lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(tone.accessibilityPrefix): \(text)")
     }
 }
 
@@ -112,83 +128,62 @@ struct AuthSceneScaffold<Accessory: View, Content: View, Footer: View>: View {
     }
 
     var body: some View {
-        ZStack {
-            backgroundLayer
-
-            VStack {
-                VStack(alignment: .leading, spacing: ZPTheme.spacing24) {
-                    header
-                    content
-                    footer
-                }
-                .frame(maxWidth: ZPTheme.authPanelMaxWidth, alignment: .leading)
-                .padding(ZPTheme.spacing32)
-                .background(
-                    RoundedRectangle(cornerRadius: ZPTheme.radiusXLarge, style: .continuous)
-                        .fill(ZPTheme.authPanelBackground)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: ZPTheme.radiusXLarge, style: .continuous)
-                        .stroke(ZPTheme.authPanelBorder, lineWidth: 1)
-                )
-                .shadow(color: ZPTheme.panelShadow, radius: 28, y: 14)
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZPTheme.spacing24) {
+                header
+                content
+                footer
             }
-            .padding(ZPTheme.spacing12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: ZPTheme.authPanelMaxWidth, alignment: .leading)
+            .padding(.horizontal, ZPTheme.spacing32)
+            .padding(.vertical, ZPTheme.spacing24)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-    }
-
-    private var backgroundLayer: some View {
-        Color.clear
-            .ignoresSafeArea()
+        .background(ZPTheme.authSceneBackground)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: ZPTheme.spacing16) {
-            ZStack {
-                RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
-                    .fill(symbolTint.opacity(0.14))
-                    .frame(width: 44, height: 44)
+        VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+            HStack(alignment: .top, spacing: ZPTheme.spacing16) {
+                HStack(alignment: .firstTextBaseline, spacing: ZPTheme.spacing10) {
+                    Image(systemName: symbolName)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(symbolTint)
+                        .accessibilityHidden(true)
 
-                Image(systemName: symbolName)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(symbolTint)
-                    .accessibilityHidden(true)
-            }
-
-            VStack(alignment: .leading, spacing: ZPTheme.spacing4) {
-                Text(title)
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(ZPTheme.textPrimary)
-
-                if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
-                        .font(.subheadline)
+                    Text(title)
+                        .font(.title)
                         .fontWeight(.semibold)
                         .foregroundStyle(ZPTheme.textPrimary)
                 }
 
-                if let detail, !detail.isEmpty {
-                    if let detailSymbolName, !detailSymbolName.isEmpty {
-                        Label(detail, systemImage: detailSymbolName)
-                            .font(.footnote)
-                            .foregroundStyle(ZPTheme.textSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .labelStyle(.titleAndIcon)
-                    } else {
-                        Text(detail)
-                            .font(.footnote)
-                            .foregroundStyle(ZPTheme.textSecondary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
+                Spacer(minLength: ZPTheme.spacing16)
+                accessory
             }
 
-            Spacer(minLength: ZPTheme.spacing16)
-            accessory
+            if let subtitle, !subtitle.isEmpty {
+                Text(subtitle)
+                    .font(.body)
+                    .foregroundStyle(ZPTheme.textSecondary)
+            }
+
+            if let detail, !detail.isEmpty {
+                if let detailSymbolName, !detailSymbolName.isEmpty {
+                    Label(detail, systemImage: detailSymbolName)
+                        .font(.footnote)
+                        .foregroundStyle(ZPTheme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .labelStyle(.titleAndIcon)
+                } else {
+                    Text(detail)
+                        .font(.footnote)
+                        .foregroundStyle(ZPTheme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
         }
     }
 }

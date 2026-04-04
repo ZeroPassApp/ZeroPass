@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct CreateVaultView: View {
     @EnvironmentObject var vault: VaultClient
@@ -19,48 +18,42 @@ struct CreateVaultView: View {
     @FocusState private var focusedField: Field?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+        VStack(alignment: .leading, spacing: ZPTheme.spacing20) {
             Text("Create Vault")
                 .font(.title2)
                 .fontWeight(.semibold)
+                .accessibilityIdentifier("createVault.title")
 
-            Text("Choose a folder on this Mac and set the master password you’ll use to unlock this vault.")
+            Text("Choose a folder and set the master password you’ll use to unlock this vault.")
                 .foregroundStyle(ZPTheme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
                 Text("Vault Location")
-                    .font(.caption)
+                    .font(.callout)
                     .fontWeight(.medium)
                     .foregroundStyle(ZPTheme.textSecondary)
 
-                HStack {
-                    Text(folderURL?.path ?? "No folder selected yet")
+                HStack(alignment: .firstTextBaseline, spacing: ZPTheme.spacing12) {
+                    Text(folderDisplayText)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .foregroundStyle(folderURL == nil ? ZPTheme.textSecondary : ZPTheme.textPrimary)
-                        .accessibilityLabel(folderURL != nil ? "Selected folder: \(folderURL!.lastPathComponent)" : "No folder selected")
+                        .accessibilityLabel(folderAccessibilityLabel)
 
                     Spacer()
 
                     Button("Choose Folder…") {
-                        chooseFolder()
+                        Task { await chooseFolder() }
                     }
                     .disabled(isBusy)
                     .accessibilityLabel("Choose vault folder")
                 }
-                .padding(.horizontal, ZPTheme.spacing12)
-                .padding(.vertical, ZPTheme.spacing10)
-                .background(ZPTheme.authInsetBackground, in: RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
-                        .stroke(ZPTheme.authInsetBorder, lineWidth: 1)
-                )
             }
 
             VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
                 Text("Master Password")
-                    .font(.caption)
+                    .font(.callout)
                     .fontWeight(.medium)
                     .foregroundStyle(ZPTheme.textSecondary)
 
@@ -75,7 +68,7 @@ struct CreateVaultView: View {
 
             VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
                 Text("Confirm Password")
-                    .font(.caption)
+                    .font(.callout)
                     .fontWeight(.medium)
                     .foregroundStyle(ZPTheme.textSecondary)
 
@@ -97,9 +90,9 @@ struct CreateVaultView: View {
             }
 
             if !confirm.isEmpty && password != confirm {
-                Text("Passwords do not match")
+                Text("Passwords do not match.")
                     .font(.caption)
-                        .foregroundStyle(ZPTheme.destructive)
+                    .foregroundStyle(ZPTheme.destructive)
             }
 
             if let localError, !localError.isEmpty {
@@ -114,23 +107,44 @@ struct CreateVaultView: View {
                 Button("Cancel") {
                     dismiss()
                 }
-                    .disabled(isBusy)
+                .keyboardShortcut(.cancelAction)
+                .disabled(isBusy)
+                .accessibilityIdentifier("createVault.cancelButton")
 
                 Spacer()
 
-                Button("Create Vault") {
+                Button {
                     create()
+                } label: {
+                    HStack(spacing: ZPTheme.spacing8) {
+                        if isBusy {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text("Create Vault")
+                    }
                 }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isBusy || folderURL == nil || password.isEmpty || password != confirm)
-                    .keyboardShortcut(.defaultAction)
-                    .accessibilityLabel("Create vault")
+                .buttonStyle(.borderedProminent)
+                .disabled(isBusy || folderURL == nil || password.isEmpty || password != confirm)
+                .keyboardShortcut(.defaultAction)
+                .accessibilityLabel("Create vault")
             }
         }
-        .padding(24)
-        .frame(width: 560)
+        .padding(ZPTheme.spacing24)
+        .frame(minWidth: ZPTheme.authSheetWidth, idealWidth: ZPTheme.authSheetWidth)
         .onAppear { focusedField = .password }
         .onDisappear { passwordStrengthTask?.cancel() }
+    }
+
+    private var folderDisplayText: String {
+        folderURL?.path(percentEncoded: false) ?? "No folder chosen"
+    }
+
+    private var folderAccessibilityLabel: String {
+        if let folderURL {
+            return "Selected folder: \(folderURL.lastPathComponent)"
+        }
+        return "No folder selected"
     }
 
     private var strengthLabel: String {
@@ -153,16 +167,14 @@ struct CreateVaultView: View {
         }
     }
 
-    private func chooseFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
-
-        if panel.runModal() == .OK, let url = panel.url {
-            folderURL = url
+    @MainActor
+    private func chooseFolder() async {
+        guard let url = await VaultFolderPicker.pickDirectory(canCreateDirectories: true) else {
+            return
         }
+
+        folderURL = url
+        focusedField = .password
     }
 
     private func create() {
