@@ -4,6 +4,7 @@ struct MainShellView: View {
     @EnvironmentObject var vault: VaultClient
 
     @State private var selectedCategory: SidebarCategory? = .all
+    @State private var searchText = ""
     @State private var showingNewItem = false
     @State private var editingItem: VaultItem?
 
@@ -22,11 +23,13 @@ struct MainShellView: View {
         } content: {
             ItemListView(
                 category: selectedCategory,
+                searchText: $searchText,
                 selectedItemID: $vault.selectedItemID,
-                editingItem: $editingItem
+                editingItem: $editingItem,
+                onCreateItem: { showingNewItem = true }
             )
             .environmentObject(vault)
-            .navigationSplitViewColumnWidth(min: 240, ideal: 300)
+            .navigationSplitViewColumnWidth(min: 260, ideal: 320)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Item list")
         } detail: {
@@ -34,38 +37,44 @@ struct MainShellView: View {
                 ItemDetailView(item: item, onEdit: { editingItem = item })
                     .environmentObject(vault)
                     .id(item.id)
+            } else if vault.items.isEmpty {
+                ContentUnavailableView {
+                    Label("Vault is Empty", systemImage: "tray")
+                } description: {
+                    Text("Create your first item to start storing secrets securely.")
+                } actions: {
+                        Button("New Item") {
+                            showingNewItem = true
+                        }
+                }
             } else {
-                ContentUnavailableView("Select an Item", systemImage: "tray", description: Text("Choose an item from the list to view its details."))
+                ContentUnavailableView(
+                    "Select an Item",
+                    systemImage: "tray",
+                    description: Text("Choose an item from the list to view its details."))
             }
         }
-        .navigationTitle(vault.vaultName)
+        .navigationTitle(vault.vaultName.isEmpty ? "ZeroPass" : vault.vaultName)
+        .searchable(
+            text: $searchText,
+            placement: .toolbar,
+            prompt: "Names, usernames, notes, domains"
+        )
+        .onAppear {
+            revealSelectedItemInVisibleScope()
+        }
+        .onChange(of: vault.selectedItemID) { _, _ in
+            revealSelectedItemInVisibleScope()
+        }
         .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    Task { try? await vault.refreshItems() }
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .accessibilityLabel("Refresh items")
-                }
-                .help("Refresh items")
-                .keyboardShortcut("r", modifiers: [.command])
-
+            ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingNewItem = true
                 } label: {
-                    Image(systemName: "plus")
-                        .accessibilityLabel("New item")
+                    Label("New Item", systemImage: "plus")
                 }
                 .help("New item")
                 .keyboardShortcut("n", modifiers: [.command])
-
-                Button {
-                    Task { await vault.lock() }
-                } label: {
-                    Image(systemName: "lock")
-                        .accessibilityLabel("Lock vault")
-                }
-                .help("Lock vault")
             }
         }
         .sheet(isPresented: $showingNewItem) {
@@ -75,6 +84,31 @@ struct MainShellView: View {
         .sheet(item: $editingItem) { item in
             ItemEditorView(item: item)
                 .environmentObject(vault)
+        }
+    }
+
+    private func revealSelectedItemInVisibleScope() {
+        guard let item = selectedItem else { return }
+
+        if !selectedCategoryContains(item) {
+            selectedCategory = .all
+        }
+
+        if !searchText.isEmpty && !VaultItemSearchMatcher.matches(item: item, query: searchText) {
+            searchText = ""
+        }
+    }
+
+    private func selectedCategoryContains(_ item: VaultItem) -> Bool {
+        switch selectedCategory {
+        case .all, .none:
+            true
+        case .favorites:
+            item.favorite
+        case .type(let type):
+            item.type == type
+        case .tag(let tag):
+            item.tags.contains(tag)
         }
     }
 }

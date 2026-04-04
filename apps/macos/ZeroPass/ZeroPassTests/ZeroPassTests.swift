@@ -304,4 +304,30 @@ final class ZeroPassTests: XCTestCase {
         XCTAssertNil(try keychain.loadSyncAPIKey(for: dir))
         XCTAssertEqual(UserDefaults.standard.string(forKey: "syncAPIKey"), "defaults-secret")
     }
+
+    func testVaultItemSearchMatcherExcludesSensitiveFields() {
+        var item = VaultItem.new(type: .login)
+        item.name = "GitHub"
+        item.fields = [
+            "username": "octocat",
+            "password": "super-secret-password"
+        ]
+
+        XCTAssertTrue(VaultItemSearchMatcher.matches(item: item, query: "octocat"))
+        XCTAssertFalse(VaultItemSearchMatcher.matches(item: item, query: "super-secret-password"))
+    }
+
+    func testVaultItemSearchMatcherKeepsNotesAndNonSensitiveFieldsSearchable() {
+        var item = VaultItem.new(type: .apikey)
+        item.name = "Sync Server"
+        item.fields = [
+            "endpoint": "sync.example.com",
+            "api_secret": "top-secret-token"
+        ]
+        item.notes = "Production sync cluster"
+
+        XCTAssertTrue(VaultItemSearchMatcher.matches(item: item, query: "sync.example.com"))
+        XCTAssertTrue(VaultItemSearchMatcher.matches(item: item, query: "Production sync cluster"))
+        XCTAssertFalse(VaultItemSearchMatcher.matches(item: item, query: "top-secret-token"))
+    }
 }

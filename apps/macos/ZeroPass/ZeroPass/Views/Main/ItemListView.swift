@@ -16,16 +16,42 @@ enum ItemSortOption: String, CaseIterable {
     }
 }
 
+enum VaultItemSearchMatcher {
+    static func matches(item: VaultItem, query: String) -> Bool {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty else { return true }
+
+        if item.name.localizedCaseInsensitiveContains(normalizedQuery) ||
+            item.notes.localizedCaseInsensitiveContains(normalizedQuery) {
+            return true
+        }
+
+        return searchableFieldValues(for: item).contains {
+            $0.localizedCaseInsensitiveContains(normalizedQuery)
+        }
+    }
+
+    private static func searchableFieldValues(for item: VaultItem) -> [String] {
+        item.fields.compactMap { key, value in
+            let normalizedValue = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !key.isEmpty, !normalizedValue.isEmpty else { return nil }
+            guard !item.type.sensitiveFieldKeys.contains(key) else { return nil }
+            return normalizedValue
+        }
+    }
+}
+
 struct ItemListView: View {
     @EnvironmentObject var vault: VaultClient
 
     let category: SidebarCategory?
+    @Binding var searchText: String
     @Binding var selectedItemID: String?
     @Binding var editingItem: VaultItem?
+    let onCreateItem: () -> Void
 
     @State private var sortOption: ItemSortOption = .name
     @State private var sortAscending = true
-    @State private var searchText = ""
     @State private var itemToDelete: VaultItem?
 
     private var filteredItems: [VaultItem] {
@@ -43,13 +69,7 @@ struct ItemListView: View {
         }
 
         if !searchText.isEmpty {
-            items = items.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText) ||
-                $0.notes.localizedCaseInsensitiveContains(searchText) ||
-                $0.fields.filter({ !$0.value.isEmpty && !$0.key.isEmpty &&
-                    !["password", "secret", "private_key", "api_key", "secret_key", "cvv", "pin"].contains($0.key) })
-                    .values.contains(where: { $0.localizedCaseInsensitiveContains(searchText) })
-            }
+            items = items.filter { VaultItemSearchMatcher.matches(item: $0, query: searchText) }
         }
 
         return items
@@ -64,6 +84,10 @@ struct ItemListView: View {
         }
     }
 
+    private var filteredItemIDs: [String] {
+        filteredItems.map(\.id)
+    }
+
     var body: some View {
         Group {
             if filteredItems.isEmpty {
@@ -74,7 +98,7 @@ struct ItemListView: View {
                         ItemRow(item: item)
                             .tag(item.id)
                             .accessibilityLabel("\(item.name), \(item.type.displayName)")
-                            .accessibilityHint("Double-click to view details")
+                            .accessibilityHint("Select to view details")
                             .contextMenu {
                                 contextMenuItems(for: item)
                             }
@@ -83,7 +107,6 @@ struct ItemListView: View {
             }
         }
         .navigationTitle(categoryTitle)
-        .searchable(text: $searchText, placement: .sidebar, prompt: "Search items")
         .toolbar {
             ToolbarItem(placement: .automatic) {
                 Menu {
@@ -105,11 +128,17 @@ struct ItemListView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down")
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
                 }
                 .help("Sort items")
                 .accessibilityLabel("Sort items")
             }
+        }
+        .onAppear {
+            ensureVisibleSelection(in: filteredItemIDs)
+        }
+        .onChange(of: filteredItemIDs) { _, ids in
+            ensureVisibleSelection(in: ids)
         }
         .alert("Delete Item", isPresented: Binding(
             get: { itemToDelete != nil },
@@ -137,9 +166,9 @@ struct ItemListView: View {
             } description: {
                 Text(emptyDescription)
             } actions: {
-                if case .all = category {
+                if category == .all || category == nil {
                     Button("Add Your First Item") {
-                        // Will be handled by parent
+                        onCreateItem()
                     }
                 }
             }
@@ -177,25 +206,33 @@ struct ItemListView: View {
 
     @ViewBuilder
     private func contextMenuItems(for item: VaultItem) -> some View {
-        Button {
-            copyUsername(item)
-        } label: {
-            Label("Copy Username", systemImage: "person")
-        }
+        let identityField = copyableIdentityField(for: item)
+        let secretField = copyableSecretField(for: item)
+        let linkField = primaryURLField(for: item)
 
         Button {
-            copySecret(item)
+            if let identityField {
+                copyFieldValue(identityField.value)
+            }
         } label: {
-            Label("Copy Password", systemImage: "key")
+            Label(identityField.map { "Copy \(fieldTitle(for: $0.key))" } ?? "Copy Identifier", systemImage: "doc.on.doc")
         }
+        .disabled(identityField == nil)
 
-        if let url = item.fields["url"], !url.isEmpty {
+        Button {
+            if let secretField {
+                copyFieldValue(secretField.value)
+            }
+        } label: {
+            Label(secretField.map { "Copy \(fieldTitle(for: $0.key))" } ?? "Copy Secret", systemImage: "key")
+        }
+        .disabled(secretField == nil)
+
+        if let linkField {
             Button {
-                if let u = URL(string: url.hasPrefix("http") ? url : "https://\(url)") {
-                    NSWorkspace.shared.open(u)
-                }
+                openURL(linkField.value)
             } label: {
-                Label("Open URL", systemImage: "globe")
+                Label(linkField.key == "endpoint" ? "Open Endpoint" : "Open Website", systemImage: "globe")
             }
         }
 
@@ -223,18 +260,58 @@ struct ItemListView: View {
         }
     }
 
-    private func copyUsername(_ item: VaultItem) {
-        let candidates = ["username", "email", "user", "login", "cardholder", "full_name"]
-        guard let value = candidates.compactMap({ item.fields[$0] }).first(where: { !$0.isEmpty }) else { return }
+    private func copyableIdentityField(for item: VaultItem) -> (key: String, value: String)? {
+        firstNonEmptyField(in: item, keys: ["username", "email", "user", "login", "cardholder", "full_name", "relying_party"])
+    }
+
+    private func copyableSecretField(for item: VaultItem) -> (key: String, value: String)? {
+        firstNonEmptyField(in: item, keys: ["password", "api_secret", "secret", "api_key", "private_key", "cvv", "card_number", "credential_id", "passphrase"])
+    }
+
+    private func primaryURLField(for item: VaultItem) -> (key: String, value: String)? {
+        firstNonEmptyField(in: item, keys: ["url", "endpoint"])
+    }
+
+    private func firstNonEmptyField(in item: VaultItem, keys: [String]) -> (key: String, value: String)? {
+        for key in keys {
+            let value = item.fields[key, default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty {
+                return (key, value)
+            }
+        }
+        return nil
+    }
+
+    private func copyFieldValue(_ value: String) {
         let secs = vault.clipboardAutoClearEnabled ? vault.clipboardAutoClearSeconds : 0
         ClipboardService.shared.copySensitive(value, clearAfterSeconds: secs)
     }
 
-    private func copySecret(_ item: VaultItem) {
-        let candidates = ["password", "api_secret", "secret", "api_key", "private_key", "cvv"]
-        guard let value = candidates.compactMap({ item.fields[$0] }).first(where: { !$0.isEmpty }) else { return }
-        let secs = vault.clipboardAutoClearEnabled ? vault.clipboardAutoClearSeconds : 0
-        ClipboardService.shared.copySensitive(value, clearAfterSeconds: secs)
+    private func openURL(_ value: String) {
+        let normalizedValue = value.hasPrefix("http://") || value.hasPrefix("https://")
+            ? value
+            : "https://\(value)"
+
+        if let url = URL(string: normalizedValue) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func fieldTitle(for key: String) -> String {
+        key.replacingOccurrences(of: "_", with: " ").capitalized
+    }
+
+    private func ensureVisibleSelection(in ids: [String]) {
+        guard !ids.isEmpty else {
+            selectedItemID = nil
+            return
+        }
+
+        if let selectedItemID, ids.contains(selectedItemID) {
+            return
+        }
+
+        selectedItemID = ids.first
     }
 }
 
@@ -248,25 +325,23 @@ private struct ItemRow: View {
         if let email = item.fields["email"], !email.isEmpty { return email }
         if let url = item.fields["url"], !url.isEmpty { return url }
         if let endpoint = item.fields["endpoint"], !endpoint.isEmpty { return endpoint }
-        if !item.notes.isEmpty { return String(item.notes.prefix(50)) }
         return ""
     }
 
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: item.type.symbolName)
-                .foregroundStyle(item.type.color)
-                .font(.system(size: 14))
+                .font(.body)
                 .frame(width: 20)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name.isEmpty ? "(Untitled)" : item.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.body.weight(.medium))
                     .lineLimit(1)
 
                 if !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.system(size: 11))
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -277,9 +352,9 @@ private struct ItemRow: View {
             if item.favorite {
                 Image(systemName: "star.fill")
                     .foregroundStyle(.yellow)
-                    .font(.system(size: 10))
+                    .font(.caption)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 4)
     }
 }

@@ -13,26 +13,25 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: $selectedCategory) {
-            Section {
-                Label("All Items", systemImage: "tray.full")
-                    .badge(vault.items.count)
-                    .tag(SidebarCategory.all)
-                    .accessibilityLabel("All Items, \(vault.items.count) items")
+            Section("Library") {
+                sidebarRow(
+                    title: "All Items",
+                    systemImage: "tray.full",
+                    count: vault.items.count,
+                    tag: .all
+                )
 
-                Label("Favorites", systemImage: "star.fill")
-                    .foregroundStyle(.yellow, .primary)
-                    .badge(vault.favoriteCount)
-                    .tag(SidebarCategory.favorites)
-                    .accessibilityLabel("Favorites, \(vault.favoriteCount) items")
+                sidebarRow(
+                    title: "Favorites",
+                    systemImage: "star.fill",
+                    count: vault.favoriteCount,
+                    tag: .favorites
+                )
             }
 
             Section("Categories") {
                 ForEach(VaultItemType.allCases) { type in
-                    Label(type.displayName, systemImage: type.symbolName)
-                        .foregroundStyle(type.color, .primary)
-                        .badge(vault.count(for: type))
-                        .tag(SidebarCategory.type(type))
-                        .accessibilityLabel("\(type.displayName), \(vault.count(for: type)) items")
+                    categoryRow(for: type)
                 }
             }
 
@@ -49,5 +48,42 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Vault categories")
+    }
+
+    @ViewBuilder
+    private func sidebarRow(
+        title: String,
+        systemImage: String,
+        count: Int,
+        tag: SidebarCategory
+    ) -> some View {
+        if count > 0 {
+            Label(title, systemImage: systemImage)
+                .badge(count)
+                .tag(tag)
+                .accessibilityLabel("\(title), \(count) items")
+        } else {
+            Label(title, systemImage: systemImage)
+                .tag(tag)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("\(title), 0 items")
+        }
+    }
+
+    @ViewBuilder
+    private func categoryRow(for type: VaultItemType) -> some View {
+        let count = vault.count(for: type)
+
+        if count > 0 {
+            Label(type.displayName, systemImage: type.symbolName)
+                .badge(count)
+                .tag(SidebarCategory.type(type))
+                .accessibilityLabel("\(type.displayName), \(count) items")
+        } else {
+            Label(type.displayName, systemImage: type.symbolName)
+                .tag(SidebarCategory.type(type))
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("\(type.displayName), 0 items")
+        }
     }
 }
