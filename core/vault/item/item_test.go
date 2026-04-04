@@ -36,7 +36,7 @@ func sampleLogin() *types.Item {
 			types.FieldPassword: "s3cur3P@ss!",
 			types.FieldURL:      "https://github.com",
 		},
-		Tags: []string{"dev", "work"},
+		Tags:  []string{"dev", "work"},
 		Notes: "main account",
 	}
 }
@@ -173,8 +173,8 @@ func TestListItemsSorting(t *testing.T) {
 	items := []string{"Charlie", "Alpha", "Bravo"}
 	for _, name := range items {
 		require.NoError(t, m.AddItem(&types.Item{
-			Type: types.ItemTypeLogin,
-			Name: name,
+			Type:   types.ItemTypeLogin,
+			Name:   name,
 			Fields: map[string]string{types.FieldPassword: "pass"},
 		}))
 	}
@@ -396,9 +396,9 @@ func TestDeleteItemWithIndexer(t *testing.T) {
 // errorIndexer always returns errors
 type errorIndexer struct{}
 
-func (ei *errorIndexer) AddToIndex(item *types.Item) error    { return errors.New("index add error") }
-func (ei *errorIndexer) UpdateIndex(item *types.Item) error   { return errors.New("index update error") }
-func (ei *errorIndexer) RemoveFromIndex(id string) error      { return errors.New("index remove error") }
+func (ei *errorIndexer) AddToIndex(item *types.Item) error  { return errors.New("index add error") }
+func (ei *errorIndexer) UpdateIndex(item *types.Item) error { return errors.New("index update error") }
+func (ei *errorIndexer) RemoveFromIndex(id string) error    { return errors.New("index remove error") }
 
 func TestAddItemIndexerError(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "items")
@@ -555,12 +555,12 @@ func TestListItemsFilterCombination(t *testing.T) {
 	require.NoError(t, m.AddItem(&types.Item{
 		Type: types.ItemTypeLogin, Name: "GitHub",
 		Fields: map[string]string{types.FieldPassword: "p"},
-		Tags: []string{"dev", "work"},
+		Tags:   []string{"dev", "work"},
 	}))
 	require.NoError(t, m.AddItem(&types.Item{
 		Type: types.ItemTypeLogin, Name: "GitLab",
 		Fields: map[string]string{types.FieldPassword: "p"},
-		Tags: []string{"dev"},
+		Tags:   []string{"dev"},
 	}))
 	require.NoError(t, m.AddItem(&types.Item{
 		Type: types.ItemTypeSecureNote, Name: "MyNote",
@@ -598,12 +598,12 @@ func TestFilterNotFavorite(t *testing.T) {
 	m := testManager(t)
 	require.NoError(t, m.AddItem(&types.Item{
 		Type: types.ItemTypeLogin, Name: "Fav",
-		Fields: map[string]string{types.FieldPassword: "p"},
+		Fields:   map[string]string{types.FieldPassword: "p"},
 		Favorite: true,
 	}))
 	require.NoError(t, m.AddItem(&types.Item{
 		Type: types.ItemTypeLogin, Name: "NotFav",
-		Fields: map[string]string{types.FieldPassword: "p"},
+		Fields:   map[string]string{types.FieldPassword: "p"},
 		Favorite: false,
 	}))
 
@@ -782,6 +782,23 @@ func TestAddItemWithExistingID(t *testing.T) {
 	assert.Equal(t, "GitHub", got.Name)
 }
 
+func TestAddItemRejectsUnsafeID(t *testing.T) {
+	m := testManager(t)
+	item := sampleLogin()
+	item.ID = "../escape"
+
+	err := m.AddItem(item)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "validate item ID")
+}
+
+func TestGetItemRejectsUnsafeID(t *testing.T) {
+	m := testManager(t)
+	_, err := m.GetItem("../escape")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "traversal")
+}
+
 func TestUpdateItemInvalidType(t *testing.T) {
 	m := testManager(t)
 	item := sampleLogin()
@@ -897,11 +914,11 @@ func TestAddPasskeyItem(t *testing.T) {
 		Type: types.ItemTypePasskey,
 		Name: "My WebAuthn Key",
 		Fields: map[string]string{
-			types.FieldCredentialID:    "cred-abc123",
+			types.FieldCredentialID:     "cred-abc123",
 			types.FieldPasskeyPublicKey: "pk-xyz",
-			types.FieldRelyingPartyID:  "example.com",
-			types.FieldUserHandle:      "user-handle-1",
-			types.FieldSignCount:       "5",
+			types.FieldRelyingPartyID:   "example.com",
+			types.FieldUserHandle:       "user-handle-1",
+			types.FieldSignCount:        "5",
 		},
 	}
 	require.NoError(t, m.AddItem(item))

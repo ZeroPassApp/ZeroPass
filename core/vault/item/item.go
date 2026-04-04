@@ -74,6 +74,9 @@ func (m *Manager) AddItem(item *types.Item) error {
 	if item.ID == "" {
 		item.ID = generateID()
 	}
+	if err := types.ValidateItemID(item.ID); err != nil {
+		return fmt.Errorf("validate item ID: %w", err)
+	}
 	item.CreatedAt = now
 	item.UpdatedAt = now
 	item.Version = 1
@@ -93,8 +96,8 @@ func (m *Manager) AddItem(item *types.Item) error {
 // GetItem reads and decrypts an item from disk.
 // It also updates the LastAccessedAt timestamp (best-effort, does not fail on save error).
 func (m *Manager) GetItem(id string) (*types.Item, error) {
-	if id == "" {
-		return nil, errors.New("item ID must not be empty")
+	if err := types.ValidateItemID(id); err != nil {
+		return nil, err
 	}
 	item, err := m.readAndDecrypt(id)
 	if err != nil {
@@ -110,8 +113,8 @@ func (m *Manager) GetItem(id string) (*types.Item, error) {
 
 // UpdateItem increments the version, re-encrypts, and saves.
 func (m *Manager) UpdateItem(id string, item *types.Item) error {
-	if id == "" {
-		return errors.New("item ID must not be empty")
+	if err := types.ValidateItemID(id); err != nil {
+		return err
 	}
 	if item == nil {
 		return errors.New("item must not be nil")
@@ -139,8 +142,8 @@ func (m *Manager) UpdateItem(id string, item *types.Item) error {
 
 // DeleteItem removes an item file and its version history from disk.
 func (m *Manager) DeleteItem(id string) error {
-	if id == "" {
-		return errors.New("item ID must not be empty")
+	if err := types.ValidateItemID(id); err != nil {
+		return err
 	}
 
 	fp := m.itemFilePath(id)
@@ -176,6 +179,9 @@ func (m *Manager) ListItems(filter types.ItemFilter) ([]*types.Item, error) {
 			continue
 		}
 		id := strings.TrimSuffix(e.Name(), ".json")
+		if err := types.ValidateItemID(id); err != nil {
+			continue
+		}
 		item, err := m.readAndDecrypt(id)
 		if err != nil {
 			continue // skip unreadable items
@@ -197,6 +203,10 @@ func (m *Manager) AllItems() ([]*types.Item, error) {
 // --- encryption / persistence ---
 
 func (m *Manager) encryptAndSave(item *types.Item) error {
+	if err := types.ValidateItemID(item.ID); err != nil {
+		return fmt.Errorf("validate item ID: %w", err)
+	}
+
 	vk, err := m.vaultKey()
 	if err != nil {
 		return fmt.Errorf("get vault key: %w", err)
@@ -246,6 +256,10 @@ func (m *Manager) encryptAndSave(item *types.Item) error {
 }
 
 func (m *Manager) readAndDecrypt(id string) (*types.Item, error) {
+	if err := types.ValidateItemID(id); err != nil {
+		return nil, err
+	}
+
 	fp := m.itemFilePath(id)
 	data, err := os.ReadFile(fp)
 	if err != nil {

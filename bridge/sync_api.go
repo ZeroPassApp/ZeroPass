@@ -30,7 +30,9 @@ func persistSyncConfig(vaultPath string, cfg *syncConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	b, err := json.MarshalIndent(cfg, "", "  ")
+	metadataOnly := *cfg
+	metadataOnly.APIKey = ""
+	b, err := json.MarshalIndent(&metadataOnly, "", "  ")
 	if err != nil {
 		return err
 	}

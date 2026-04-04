@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	syncserver "github.com/zeropass/zeropass/core/sync/server"
 	"github.com/zeropass/zeropass/core/sync/protocol"
+	syncserver "github.com/zeropass/zeropass/core/sync/server"
 )
 
 // integrationServer creates a full stack (SQLite + handler) httptest server.
@@ -423,7 +423,7 @@ func TestIntegration_CORSPreflight(t *testing.T) {
 	require.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.NotEmpty(t, resp.Header.Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
 }
 
 // TestIntegration_CORSHeaders tests CORS headers on normal requests.
@@ -437,7 +437,7 @@ func TestIntegration_CORSHeaders(t *testing.T) {
 	require.NoError(t, err)
 	resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
 }
 
 // TestIntegration_MultiDeviceSyncE2E tests a complete three-device sync scenario.
@@ -923,48 +923,48 @@ func TestIntegration_CORSPreflightOnAllEndpoints(t *testing.T) {
 			require.NoError(t, err)
 			resp.Body.Close()
 			assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-			assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+			assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
 		})
 	}
 }
 
 func TestRun_InvalidDBPath(t *testing.T) {
-err := run(serverConfig{DBPath: "/nonexistent/dir/cannot/create/db.sqlite"})
-assert.Error(t, err)
-assert.Contains(t, err.Error(), "initialize storage")
+	err := run(serverConfig{DBPath: "/nonexistent/dir/cannot/create/db.sqlite", APIKey: "test-key"})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "initialize storage")
 }
 
 func TestRun_GracefulShutdown(t *testing.T) {
-dbPath := filepath.Join(t.TempDir(), "run-test.db")
-errCh := make(chan error, 1)
-go func() {
-errCh <- run(serverConfig{DBPath: dbPath, APIKey: "test-key"})
-}()
+	dbPath := filepath.Join(t.TempDir(), "run-test.db")
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- run(serverConfig{DBPath: dbPath, APIKey: "test-key"})
+	}()
 
-// Give server time to start, then trigger shutdown
-time.Sleep(300 * time.Millisecond)
-p, _ := os.FindProcess(os.Getpid())
-_ = p.Signal(os.Interrupt)
+	// Give server time to start, then trigger shutdown
+	time.Sleep(300 * time.Millisecond)
+	p, _ := os.FindProcess(os.Getpid())
+	_ = p.Signal(os.Interrupt)
 
-select {
-case err := <-errCh:
-_ = err // clean shutdown or error, both acceptable
-case <-time.After(5 * time.Second):
-t.Fatal("run() did not return within timeout")
-}
+	select {
+	case err := <-errCh:
+		_ = err // clean shutdown or error, both acceptable
+	case <-time.After(5 * time.Second):
+		t.Fatal("run() did not return within timeout")
+	}
 }
 
 func TestNewServer_Configuration(t *testing.T) {
-dbPath := filepath.Join(t.TempDir(), "cfg-test.db")
-store, err := NewSQLiteStorage(dbPath)
-require.NoError(t, err)
-defer store.Close()
-require.NoError(t, store.CreateTables())
+	dbPath := filepath.Join(t.TempDir(), "cfg-test.db")
+	store, err := NewSQLiteStorage(dbPath)
+	require.NoError(t, err)
+	defer store.Close()
+	require.NoError(t, store.CreateTables())
 
-srv := NewServer(9999, store, "my-key")
-assert.Equal(t, ":9999", srv.Addr)
-assert.Equal(t, 15*time.Second, srv.ReadTimeout)
-assert.Equal(t, 15*time.Second, srv.WriteTimeout)
-assert.Equal(t, 60*time.Second, srv.IdleTimeout)
-assert.NotNil(t, srv.Handler)
+	srv := NewServer(9999, store, "my-key")
+	assert.Equal(t, ":9999", srv.Addr)
+	assert.Equal(t, 15*time.Second, srv.ReadTimeout)
+	assert.Equal(t, 15*time.Second, srv.WriteTimeout)
+	assert.Equal(t, 60*time.Second, srv.IdleTimeout)
+	assert.NotNil(t, srv.Handler)
 }

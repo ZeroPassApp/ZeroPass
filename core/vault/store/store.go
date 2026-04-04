@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -119,9 +120,9 @@ type Vault struct {
 	locked   bool
 
 	// auto-lock
-	lastAccess        time.Time
-	autoTimer         *time.Timer
-	autoLockDisabled  bool // runtime-only (not persisted)
+	lastAccess       time.Time
+	autoTimer        *time.Timer
+	autoLockDisabled bool // runtime-only (not persisted)
 }
 
 const vaultKeyCheckMagic = "zeropass:vault-key-check:v1"
@@ -330,10 +331,14 @@ func (v *Vault) ValidateRecovery(mnemonic string) error {
 		return fmt.Errorf("decode encrypted recovery key: %w", err)
 	}
 
-	_, err = key.DecryptVaultKeyWithRecovery(&key.EncryptedVaultKey{Ciphertext: encBytes}, mnemonic)
+	vaultKey, err := key.DecryptVaultKeyWithRecovery(&key.EncryptedVaultKey{Ciphertext: encBytes}, mnemonic)
 	if err != nil {
 		return fmt.Errorf("validate recovery: %w", err)
 	}
+	defer func() {
+		crypto.ZeroBytes(vaultKey)
+		runtime.KeepAlive(vaultKey)
+	}()
 
 	return nil
 }
@@ -358,6 +363,17 @@ func (v *Vault) UnlockWithRecovery(mnemonic string) (newMnemonic string, err err
 	if err != nil {
 		return "", fmt.Errorf("unlock vault with recovery: %w", err)
 	}
+	defer func() {
+		if err != nil {
+			crypto.ZeroBytes(vaultKey)
+			runtime.KeepAlive(vaultKey)
+		}
+	}()
+
+	newMnemonic, err = v.regenerateRecoveryLocked(vaultKey)
+	if err != nil {
+		return "", fmt.Errorf("rotate recovery key: %w", err)
+	}
 
 	v.vaultKey = vaultKey
 	v.locked = false
@@ -367,14 +383,6 @@ func (v *Vault) UnlockWithRecovery(mnemonic string) (newMnemonic string, err err
 
 	// Decrypt index file at rest (best-effort).
 	_ = index.DecryptIndexFile(v.IndexPath(), v.vaultKey)
-
-	// Auto-rotate recovery key (PRD §8.5: one-time use)
-	newMnemonic, err = v.regenerateRecoveryLocked(vaultKey)
-	if err != nil {
-		// Unlock succeeded but rotation failed — vault is usable,
-		// user can manually regenerate via RegenerateRecovery()
-		return "", nil
-	}
 
 	return newMnemonic, nil
 }

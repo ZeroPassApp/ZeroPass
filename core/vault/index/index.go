@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	_ "modernc.org/sqlite" // pure-Go SQLite driver
@@ -18,6 +19,20 @@ import (
 type Index struct {
 	db   *sql.DB
 	path string
+}
+
+const (
+	searchPolicyVersionKey     = "search_policy_version"
+	currentSearchPolicyVersion = 1
+)
+
+var searchableFieldKeys = map[string]struct{}{
+	types.FieldUsername:       {},
+	types.FieldURL:            {},
+	types.FieldEmail:          {},
+	types.FieldEndpoint:       {},
+	types.FieldFingerprint:    {},
+	types.FieldRelyingPartyID: {},
 }
 
 // Open opens (or creates) the search index at the given path.
@@ -38,7 +53,13 @@ func Open(dbPath string) (*Index, error) {
 		return nil, err
 	}
 
-	return &Index{db: db, path: dbPath}, nil
+	idx := &Index{db: db, path: dbPath}
+	if err := idx.markSearchPolicyCurrentIfEmpty(); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	return idx, nil
 }
 
 // Close closes the index database.
@@ -62,9 +83,9 @@ func (idx *Index) AddToIndex(item *types.Item) error {
 		item.Name,
 		string(item.Type),
 		strings.Join(item.Tags, " "),
-		item.Notes,
+		"",
 		joinMapKeys(item.CustomFields),
-		joinMapValues(item.Fields, item.CustomFields),
+		joinSearchableFieldValues(item.Fields),
 	)
 	if err != nil {
 		return fmt.Errorf("index add: %w", err)
@@ -84,6 +105,30 @@ func (idx *Index) AddToIndex(item *types.Item) error {
 // UpdateIndex updates an item in the search index.
 func (idx *Index) UpdateIndex(item *types.Item) error {
 	return idx.AddToIndex(item)
+}
+
+// EnsureCurrentPolicy rebuilds legacy indexes when the active search policy has
+// changed and old on-disk rows may still contain sensitive material.
+func (idx *Index) EnsureCurrentPolicy(loadItems func() ([]*types.Item, error)) error {
+	version, err := idx.searchPolicyVersion()
+	if err != nil {
+		return err
+	}
+	if version == currentSearchPolicyVersion {
+		return nil
+	}
+	if loadItems == nil {
+		return errors.New("load items callback is required for search policy migration")
+	}
+
+	items, err := loadItems()
+	if err != nil {
+		return fmt.Errorf("load items for search policy migration: %w", err)
+	}
+	if err := idx.RebuildIndex(items); err != nil {
+		return fmt.Errorf("rebuild search index for current policy: %w", err)
+	}
+	return nil
 }
 
 // RemoveFromIndex removes an item from the search index.
@@ -159,7 +204,7 @@ func (idx *Index) RebuildIndex(items []*types.Item) error {
 			return err
 		}
 	}
-	return nil
+	return idx.setSearchPolicyVersion(currentSearchPolicyVersion)
 }
 
 // --- helpers ---
@@ -187,6 +232,55 @@ func createTables(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("create map table: %w", err)
 	}
+	_, err = db.Exec(`
+		CREATE TABLE IF NOT EXISTS index_meta (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("create meta table: %w", err)
+	}
+	return nil
+}
+
+func (idx *Index) markSearchPolicyCurrentIfEmpty() error {
+	var count int
+	if err := idx.db.QueryRow(`SELECT COUNT(1) FROM items_map`).Scan(&count); err != nil {
+		return fmt.Errorf("count indexed items: %w", err)
+	}
+	if count == 0 {
+		return idx.setSearchPolicyVersion(currentSearchPolicyVersion)
+	}
+	return nil
+}
+
+func (idx *Index) searchPolicyVersion() (int, error) {
+	var raw string
+	err := idx.db.QueryRow(`SELECT value FROM index_meta WHERE key = ?`, searchPolicyVersionKey).Scan(&raw)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return 0, nil
+		}
+		return 0, fmt.Errorf("read search policy version: %w", err)
+	}
+
+	version, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, fmt.Errorf("parse search policy version: %w", err)
+	}
+	return version, nil
+}
+
+func (idx *Index) setSearchPolicyVersion(version int) error {
+	_, err := idx.db.Exec(
+		`INSERT INTO index_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		searchPolicyVersionKey,
+		strconv.Itoa(version),
+	)
+	if err != nil {
+		return fmt.Errorf("persist search policy version: %w", err)
+	}
 	return nil
 }
 
@@ -208,6 +302,23 @@ func joinMapValues(maps ...map[string]string) string {
 			if v != "" {
 				vals = append(vals, v)
 			}
+		}
+	}
+	return strings.Join(vals, " ")
+}
+
+func joinSearchableFieldValues(fields map[string]string) string {
+	if len(fields) == 0 {
+		return ""
+	}
+
+	vals := make([]string, 0, len(fields))
+	for key, value := range fields {
+		if value == "" {
+			continue
+		}
+		if _, ok := searchableFieldKeys[key]; ok {
+			vals = append(vals, value)
 		}
 	}
 	return strings.Join(vals, " ")

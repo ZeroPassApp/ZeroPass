@@ -1,8 +1,7 @@
 import AppKit
 import Foundation
 
-@MainActor
-final class AutoLockService {
+nonisolated final class AutoLockService {
     var onLock: (() -> Void)?
 
     private var isVaultUnlocked = false
@@ -11,7 +10,7 @@ final class AutoLockService {
     private var lockOnSleep: Bool = true
     private var lockOnScreenSleep: Bool = true
 
-    private var pendingTask: Task<Void, Never>?
+    private var pendingWorkItem: DispatchWorkItem?
     private var observers: [NSObjectProtocol] = []
 
     func configure(timeoutSeconds: Int, lockOnSleep: Bool, lockOnScreenSleep: Bool) {
@@ -27,8 +26,8 @@ final class AutoLockService {
             start()
             reschedule()
         } else {
-            pendingTask?.cancel()
-            pendingTask = nil
+            pendingWorkItem?.cancel()
+            pendingWorkItem = nil
         }
     }
 
@@ -38,8 +37,8 @@ final class AutoLockService {
     }
 
     func stop() {
-        pendingTask?.cancel()
-        pendingTask = nil
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
 
         for o in observers {
             NSWorkspace.shared.notificationCenter.removeObserver(o)
@@ -53,38 +52,39 @@ final class AutoLockService {
         let nc = NSWorkspace.shared.notificationCenter
         observers.append(
             nc.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in
-                    guard let self, self.lockOnSleep, self.isVaultUnlocked else { return }
-                    self.onLock?()
-                    NotificationService.shared.notify(title: "ZeroPass", body: "Vault locked (sleep)")
-                }
+                guard let self, self.lockOnSleep, self.isVaultUnlocked else { return }
+                self.onLock?()
+                self.notify(body: "Vault locked (sleep)")
             }
         )
         observers.append(
             nc.addObserver(forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                Task { @MainActor in
-                    guard let self, self.lockOnScreenSleep, self.isVaultUnlocked else { return }
-                    self.onLock?()
-                    NotificationService.shared.notify(title: "ZeroPass", body: "Vault locked (screen sleep)")
-                }
+                guard let self, self.lockOnScreenSleep, self.isVaultUnlocked else { return }
+                self.onLock?()
+                self.notify(body: "Vault locked (screen sleep)")
             }
         )
     }
 
     private func reschedule() {
-        pendingTask?.cancel()
-        pendingTask = nil
+        pendingWorkItem?.cancel()
+        pendingWorkItem = nil
 
         guard isVaultUnlocked else { return }
         guard timeoutSeconds > 0 else { return }
 
-        pendingTask = Task { [timeoutSeconds] in
-            try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds) * 1_000_000_000)
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                self.onLock?()
-                NotificationService.shared.notify(title: "ZeroPass", body: "Vault auto-locked")
-            }
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self, self.isVaultUnlocked else { return }
+            self.onLock?()
+            self.notify(body: "Vault auto-locked")
+        }
+        pendingWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + .seconds(timeoutSeconds), execute: workItem)
+    }
+
+    private func notify(body: String) {
+        Task { @MainActor in
+            NotificationService.shared.notify(title: "ZeroPass", body: body)
         }
     }
 }

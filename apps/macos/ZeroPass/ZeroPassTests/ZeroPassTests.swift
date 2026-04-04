@@ -1,6 +1,41 @@
 import XCTest
+import LocalAuthentication
 @testable import ZeroPass
 
+private final class FakeKeychainStore: KeychainStoring {
+    var vaultKeys: [String: String] = [:]
+    var syncKeys: [String: String] = [:]
+    var syncStoreError: Error?
+
+    func storeVaultKeyBase64(_ vaultKeyBase64: String, for vaultURL: URL, requireUserPresence: Bool) throws {
+        vaultKeys[vaultURL.path] = vaultKeyBase64
+    }
+
+    func loadVaultKeyBase64(for vaultURL: URL, context: LAContext) throws -> String? {
+        vaultKeys[vaultURL.path]
+    }
+
+    func deleteVaultKey(for vaultURL: URL) throws {
+        vaultKeys.removeValue(forKey: vaultURL.path)
+    }
+
+    func storeSyncAPIKey(_ apiKey: String, for vaultURL: URL) throws {
+        if let syncStoreError {
+            throw syncStoreError
+        }
+        syncKeys[vaultURL.path] = apiKey
+    }
+
+    func loadSyncAPIKey(for vaultURL: URL) throws -> String? {
+        syncKeys[vaultURL.path]
+    }
+
+    func deleteSyncAPIKey(for vaultURL: URL) throws {
+        syncKeys.removeValue(forKey: vaultURL.path)
+    }
+}
+
+@MainActor
 final class ZeroPassTests: XCTestCase {
     private func makeTempVaultDir() throws -> URL {
         let fm = FileManager.default
@@ -112,5 +147,161 @@ final class ZeroPassTests: XCTestCase {
         XCTAssertTrue(items.contains(where: { $0.name == "Imported" }))
 
         try ZPBridge.close(handle: created.handle)
+    }
+
+    func testSyncConfigDecodesWithoutPersistedAPIKey() throws {
+        let json = #"{"server_url":"https://sync.example.com","device_id":"device-1","last_sync_time":123456}"#
+        let data = try XCTUnwrap(json.data(using: .utf8))
+        let cfg = try JSONDecoder().decode(ZPBridge.SyncConfig.self, from: data)
+
+        XCTAssertEqual(cfg.serverURL, "https://sync.example.com")
+        XCTAssertEqual(cfg.deviceID, "device-1")
+        XCTAssertNil(cfg.apiKey)
+        XCTAssertEqual(cfg.lastSyncTime, 123456)
+    }
+
+    func testMigrateLegacySyncAPIKeyMovesSecretOutOfDiskAndDefaults() throws {
+        let keychain = FakeKeychainStore()
+        let dir = try makeTempVaultDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        defer {
+            UserDefaults.standard.removeObject(forKey: "syncAPIKey")
+        }
+
+        let client = VaultClient(keychain: keychain)
+        let configURL = client.syncConfigURL(for: dir)
+        let legacyConfig = ZPBridge.SyncConfig(
+            serverURL: "https://sync.example.com",
+            deviceID: "device-1",
+            apiKey: "disk-secret",
+            lastSyncTime: 42
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(legacyConfig).write(to: configURL, options: .atomic)
+        UserDefaults.standard.set("defaults-secret", forKey: "syncAPIKey")
+
+        client.migrateLegacySyncAPIKeyIfNeeded(for: dir)
+
+        XCTAssertEqual(try keychain.loadSyncAPIKey(for: dir), "disk-secret")
+        XCTAssertNil(UserDefaults.standard.string(forKey: "syncAPIKey"))
+
+        let persisted = try Data(contentsOf: configURL)
+        let migrated = try JSONDecoder().decode(ZPBridge.SyncConfig.self, from: persisted)
+        XCTAssertEqual(migrated.serverURL, "https://sync.example.com")
+        XCTAssertEqual(migrated.deviceID, "device-1")
+        XCTAssertNil(migrated.apiKey)
+        XCTAssertEqual(migrated.lastSyncTime, 42)
+        XCTAssertFalse(String(decoding: persisted, as: UTF8.self).contains("disk-secret"))
+    }
+
+    func testMigrateLegacySyncAPIKeyPrefersExistingStoredSecret() throws {
+        let keychain = FakeKeychainStore()
+        let dir = try makeTempVaultDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        defer { UserDefaults.standard.removeObject(forKey: "syncAPIKey") }
+
+        let client = VaultClient(keychain: keychain)
+        let configURL = client.syncConfigURL(for: dir)
+        let legacyConfig = ZPBridge.SyncConfig(
+            serverURL: "https://sync.example.com",
+            deviceID: "device-1",
+            apiKey: "disk-secret",
+            lastSyncTime: 7
+        )
+        try JSONEncoder().encode(legacyConfig).write(to: configURL, options: .atomic)
+        try keychain.storeSyncAPIKey("stored-secret", for: dir)
+        UserDefaults.standard.set("defaults-secret", forKey: "syncAPIKey")
+
+        client.migrateLegacySyncAPIKeyIfNeeded(for: dir)
+
+        XCTAssertEqual(try keychain.loadSyncAPIKey(for: dir), "stored-secret")
+        let persisted = try Data(contentsOf: configURL)
+        XCTAssertFalse(String(decoding: persisted, as: UTF8.self).contains("disk-secret"))
+    }
+
+    func testMigrateLegacySyncAPIKeyKeepsLegacyCopiesWhenKeychainStoreFails() throws {
+        let keychain = FakeKeychainStore()
+        keychain.syncStoreError = KeychainError.unexpectedStatus(errSecAuthFailed)
+
+        let dir = try makeTempVaultDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        defer { UserDefaults.standard.removeObject(forKey: "syncAPIKey") }
+
+        let client = VaultClient(keychain: keychain)
+        let configURL = client.syncConfigURL(for: dir)
+        let legacyConfig = ZPBridge.SyncConfig(
+            serverURL: "https://sync.example.com",
+            deviceID: "device-1",
+            apiKey: "disk-secret",
+            lastSyncTime: 7
+        )
+        try JSONEncoder().encode(legacyConfig).write(to: configURL, options: .atomic)
+        UserDefaults.standard.set("defaults-secret", forKey: "syncAPIKey")
+
+        client.migrateLegacySyncAPIKeyIfNeeded(for: dir)
+
+        XCTAssertNil(try keychain.loadSyncAPIKey(for: dir))
+        XCTAssertEqual(UserDefaults.standard.string(forKey: "syncAPIKey"), "defaults-secret")
+
+        let persisted = try Data(contentsOf: configURL)
+        let unmigrated = try JSONDecoder().decode(ZPBridge.SyncConfig.self, from: persisted)
+        XCTAssertEqual(unmigrated.apiKey, "disk-secret")
+    }
+
+    func testMigrateLegacySyncAPIKeyIgnoresBlankStoredSecret() throws {
+        let keychain = FakeKeychainStore()
+        let dir = try makeTempVaultDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let client = VaultClient(keychain: keychain)
+        let configURL = client.syncConfigURL(for: dir)
+        let legacyConfig = ZPBridge.SyncConfig(
+            serverURL: "https://sync.example.com",
+            deviceID: "device-1",
+            apiKey: "disk-secret",
+            lastSyncTime: 9
+        )
+        try JSONEncoder().encode(legacyConfig).write(to: configURL, options: .atomic)
+        try keychain.storeSyncAPIKey("   ", for: dir)
+
+        client.migrateLegacySyncAPIKeyIfNeeded(for: dir)
+
+        XCTAssertEqual(try keychain.loadSyncAPIKey(for: dir), "disk-secret")
+
+        let persisted = try Data(contentsOf: configURL)
+        let migrated = try JSONDecoder().decode(ZPBridge.SyncConfig.self, from: persisted)
+        XCTAssertNil(migrated.apiKey)
+    }
+
+    func testOpenVaultWithoutSyncConfigKeepsStoredSyncAPIKey() async throws {
+        let keychain = FakeKeychainStore()
+        let dir = try makeTempVaultDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let created = try ZPBridge.createVault(path: dir.path, masterPassword: "master-password")
+        try ZPBridge.close(handle: created.handle)
+        try keychain.storeSyncAPIKey("stored-secret", for: dir)
+
+        let client = VaultClient(keychain: keychain)
+        try await client.openVault(dir)
+
+        XCTAssertEqual(try keychain.loadSyncAPIKey(for: dir), "stored-secret")
+        try await client.closeVault()
+    }
+
+    func testMigrateLegacySyncAPIKeyDoesNotAttachDefaultsSecretWithoutSyncMetadata() throws {
+        let keychain = FakeKeychainStore()
+        let dir = try makeTempVaultDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        defer { UserDefaults.standard.removeObject(forKey: "syncAPIKey") }
+
+        let client = VaultClient(keychain: keychain)
+        UserDefaults.standard.set("defaults-secret", forKey: "syncAPIKey")
+
+        client.migrateLegacySyncAPIKeyIfNeeded(for: dir)
+
+        XCTAssertNil(try keychain.loadSyncAPIKey(for: dir))
+        XCTAssertEqual(UserDefaults.standard.string(forKey: "syncAPIKey"), "defaults-secret")
     }
 }

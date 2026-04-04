@@ -7,7 +7,7 @@ struct SyncSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Sync") {
+            Section("Sync Preview") {
                 Toggle("Enable Sync", isOn: $vault.syncEnabled)
                     .disabled(!vault.hasVault)
 
@@ -19,7 +19,7 @@ struct SyncSettingsView: View {
                     .font(.system(.body, design: .monospaced))
                     .disabled(!vault.syncEnabled)
 
-                SecureField("API Key (optional)", text: $vault.syncAPIKey)
+                SecureField("API Key (stored in Keychain)", text: $vault.syncAPIKey)
                     .disabled(!vault.syncEnabled)
 
                 if let last = vault.syncLastSyncedAt {
@@ -34,6 +34,10 @@ struct SyncSettingsView: View {
                     Text(status)
                         .foregroundStyle(.secondary)
                 }
+
+                Text("Sync remains a preview. API keys are stored in Keychain; sync.json now keeps metadata only.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Actions") {

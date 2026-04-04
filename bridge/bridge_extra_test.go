@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zeropass/zeropass/core/vault/types"
 )
 
@@ -117,7 +119,7 @@ func TestBridgeCAPI_SyncSetup_PersistsConfig(t *testing.T) {
 	cfg := map[string]any{
 		"server_url": "http://127.0.0.1:9999",
 		"device_id":  "device-test",
-		"api_key":    "",
+		"api_key":    "super-secret-api-key",
 	}
 	cfgBytes, _ := json.Marshal(cfg)
 	requireOKGo(t, zpCSyncSetup(created.Handle, string(cfgBytes)))
@@ -129,8 +131,35 @@ func TestBridgeCAPI_SyncSetup_PersistsConfig(t *testing.T) {
 	if !strings.Contains(string(b), "server_url") {
 		t.Fatalf("expected persisted sync config to contain server_url, got: %s", string(b))
 	}
+	if strings.Contains(string(b), "super-secret-api-key") || strings.Contains(string(b), "api_key") {
+		t.Fatalf("expected persisted sync config to omit api_key, got: %s", string(b))
+	}
 
 	requireOKGo(t, zpCCloseVault(created.Handle))
+}
+
+func TestLoadSyncClientReadsMetadataWithoutSecret(t *testing.T) {
+	vaultPath := filepath.Join(t.TempDir(), "vault")
+	require.NoError(t, os.MkdirAll(vaultPath, 0700))
+	require.NoError(t, persistSyncConfig(vaultPath, &syncConfig{
+		ServerURL:    "http://127.0.0.1:9999",
+		DeviceID:     "device-test",
+		APIKey:       "should-not-persist",
+		LastSyncTime: 12345,
+	}))
+
+	b, err := os.ReadFile(filepath.Join(vaultPath, syncConfigFileName))
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), "should-not-persist")
+	assert.NotContains(t, string(b), "api_key")
+
+	cli, cfg := loadSyncClient(vaultPath)
+	require.NotNil(t, cli)
+	require.NotNil(t, cfg)
+	assert.Equal(t, "http://127.0.0.1:9999", cfg.ServerURL)
+	assert.Equal(t, "device-test", cfg.DeviceID)
+	assert.Empty(t, cfg.APIKey)
+	assert.Equal(t, int64(12345), cfg.LastSyncTime)
 }
 
 func TestBridgeCAPI_CryptoAPI_Basics(t *testing.T) {

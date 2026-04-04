@@ -113,6 +113,10 @@ func newItemManager(v *store.Vault) (*item.Manager, *index.Index, error) {
 		return nil, nil, fmt.Errorf("open index: %w", err)
 	}
 	mgr := item.NewManager(v.ItemsPath(), v.VaultKey, idx)
+	if err := idx.EnsureCurrentPolicy(mgr.AllItems); err != nil {
+		_ = idx.Close()
+		return nil, nil, fmt.Errorf("initialize search index: %w", err)
+	}
 	return mgr, idx, nil
 }
 

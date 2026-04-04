@@ -20,6 +20,7 @@ type serverConfig struct {
 	Port          int
 	DBPath        string
 	APIKey        string
+	UnsafeNoAuth  bool
 	StorageType   string // "sqlite" (default) or "postgres"
 	PostgresURL   string
 	BlobEnabled   bool
@@ -33,7 +34,8 @@ func main() {
 	var cfg serverConfig
 	flag.IntVar(&cfg.Port, "port", 8443, "HTTP listen port")
 	flag.StringVar(&cfg.DBPath, "db-path", "zeropass-sync.db", "SQLite database file path")
-	flag.StringVar(&cfg.APIKey, "api-key", "", "API key for Bearer auth (empty = no auth)")
+	flag.StringVar(&cfg.APIKey, "api-key", "", "API key for Bearer auth")
+	flag.BoolVar(&cfg.UnsafeNoAuth, "unsafe-no-auth", false, "UNSAFE: allow server startup without Bearer auth")
 	flag.StringVar(&cfg.StorageType, "storage", "sqlite", "Storage backend: sqlite or postgres")
 	flag.StringVar(&cfg.PostgresURL, "postgres-url", "", "PostgreSQL connection string")
 	flag.BoolVar(&cfg.BlobEnabled, "blob-enabled", false, "Enable S3/MinIO blob storage for payloads")
@@ -52,6 +54,12 @@ func main() {
 func run(cfg serverConfig) error {
 	if cfg.StorageType == "" {
 		cfg.StorageType = "sqlite"
+	}
+	if err := validateServerConfig(cfg); err != nil {
+		return err
+	}
+	if cfg.APIKey == "" && cfg.UnsafeNoAuth {
+		log.Print("WARNING: starting sync server without authentication because --unsafe-no-auth was set")
 	}
 
 	var store StorageWithTables
@@ -113,6 +121,13 @@ func run(cfg serverConfig) error {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	log.Println("Server stopped")
+	return nil
+}
+
+func validateServerConfig(cfg serverConfig) error {
+	if cfg.APIKey == "" && !cfg.UnsafeNoAuth {
+		return fmt.Errorf("--api-key is required unless --unsafe-no-auth is set")
+	}
 	return nil
 }
 

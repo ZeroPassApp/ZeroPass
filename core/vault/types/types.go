@@ -1,7 +1,12 @@
 // Package types defines data structures and constants for vault items.
 package types
 
-import "time"
+import (
+	"errors"
+	"strings"
+	"time"
+	"unicode"
+)
 
 // ItemType represents the category of a vault item.
 type ItemType string
@@ -46,9 +51,9 @@ const (
 
 // SSH key field name constants.
 const (
-	FieldPublicKey  = "public_key"
-	FieldPrivateKey = "private_key"
-	FieldPassphrase = "passphrase"
+	FieldPublicKey   = "public_key"
+	FieldPrivateKey  = "private_key"
+	FieldPassphrase  = "passphrase"
 	FieldFingerprint = "fingerprint"
 )
 
@@ -71,11 +76,11 @@ const (
 
 // Passkey field name constants.
 const (
-	FieldCredentialID    = "credential_id"
+	FieldCredentialID     = "credential_id"
 	FieldPasskeyPublicKey = "passkey_public_key"
-	FieldRelyingPartyID  = "rp_id"
-	FieldUserHandle      = "user_handle"
-	FieldSignCount       = "sign_count"
+	FieldRelyingPartyID   = "rp_id"
+	FieldUserHandle       = "user_handle"
+	FieldSignCount        = "sign_count"
 )
 
 // Item represents a single vault entry.
@@ -97,7 +102,7 @@ type Item struct {
 // EncryptedItem is the on-disk format for an encrypted vault item.
 type EncryptedItem struct {
 	ID       string `json:"id"`
-	Data     string `json:"data"`     // base64-encoded encrypted JSON
+	Data     string `json:"data"` // base64-encoded encrypted JSON
 	Version  int    `json:"version"`
 	Checksum string `json:"checksum"` // SHA-256 of encrypted data
 }
@@ -126,3 +131,24 @@ const (
 	SortAsc  = "asc"
 	SortDesc = "desc"
 )
+
+// ValidateItemID ensures item IDs are safe to use as filenames and cannot
+// escape the vault items directory.
+func ValidateItemID(id string) error {
+	if strings.TrimSpace(id) == "" {
+		return errors.New("item ID must not be empty")
+	}
+	if strings.TrimSpace(id) != id {
+		return errors.New("item ID must not contain leading or trailing whitespace")
+	}
+	if strings.Contains(id, "..") {
+		return errors.New("item ID must not contain traversal sequences")
+	}
+	for _, r := range id {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_' || r == '.' {
+			continue
+		}
+		return errors.New("item ID contains unsupported characters")
+	}
+	return nil
+}

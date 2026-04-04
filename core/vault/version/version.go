@@ -304,10 +304,7 @@ func (m *Manager) encryptItem(item *types.Item) (persistedVersion, error) {
 }
 
 func validateItemID(id string) error {
-	if strings.Contains(id, "/") || strings.Contains(id, "\\") || strings.Contains(id, "..") {
-		return errors.New("invalid item ID")
-	}
-	return nil
+	return types.ValidateItemID(id)
 }
 
 func atomicReplaceFile(from, to string) error {

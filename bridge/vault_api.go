@@ -62,6 +62,13 @@ func ensureManagersUnlocked(s *vaultSession) error {
 	s.idx = idx
 	s.mgr = item.NewManager(s.vault.ItemsPath(), s.vault.VaultKey, idx)
 	s.verMgr = version.NewManager(s.vault.ItemsPath(), s.vault.VaultKey, s.vault.Config().MaxVersions)
+	if err := s.idx.EnsureCurrentPolicy(s.mgr.AllItems); err != nil {
+		_ = s.idx.Close()
+		s.idx = nil
+		s.mgr = nil
+		s.verMgr = nil
+		return fmt.Errorf("initialize search index: %w", err)
+	}
 	return nil
 }
 
@@ -135,11 +142,7 @@ func ZPOpenVault(path *C.char) (res C.ZPResult) {
 	v.DisableAutoLock()
 
 	sc, scfg := loadSyncClient(vaultPath)
-	if sc != nil {
-		// Ensure API key is applied if present.
-		// (loadSyncClient already does this.)
-		_ = sc
-	}
+	_ = sc
 
 	s := &vaultSession{vault: v, lockFile: lockFile, syncCli: sc, syncCfg: scfg}
 	h := registerSession(s)
@@ -335,10 +338,10 @@ func ZPChangeMasterPassword(handle C.long, oldPassword *C.char, newPassword *C.c
 // --- sync config persistence (phase 1) ---
 
 type syncConfig struct {
-	ServerURL     string `json:"server_url"`
-	DeviceID      string `json:"device_id"`
-	APIKey        string `json:"api_key,omitempty"`
-	LastSyncTime  int64  `json:"last_sync_time,omitempty"`
+	ServerURL    string `json:"server_url"`
+	DeviceID     string `json:"device_id"`
+	APIKey       string `json:"api_key,omitempty"`
+	LastSyncTime int64  `json:"last_sync_time,omitempty"`
 }
 
 const syncConfigFileName = "sync.json"
@@ -357,8 +360,6 @@ func loadSyncClient(vaultPath string) (*client.SyncClient, *syncConfig) {
 		return nil, &cfg
 	}
 	opts := []client.Option{client.WithLastSyncTime(cfg.LastSyncTime)}
-	if cfg.APIKey != "" {
-		opts = append(opts, client.WithAPIKey(cfg.APIKey))
-	}
+	cfg.APIKey = ""
 	return client.NewSyncClient(cfg.ServerURL, cfg.DeviceID, opts...), &cfg
 }

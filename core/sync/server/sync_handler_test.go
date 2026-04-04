@@ -284,9 +284,23 @@ func TestCORS_Preflight(t *testing.T) {
 	resp.Body.Close()
 
 	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
-	assert.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+	assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
 	assert.Contains(t, resp.Header.Get("Access-Control-Allow-Methods"), "GET")
 	assert.Contains(t, resp.Header.Get("Access-Control-Allow-Headers"), "Authorization")
+}
+
+func TestCORS_NoWildcardOnNormalRequest(t *testing.T) {
+	srv, _ := newTestServer("")
+	defer srv.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/health", nil)
+	req.Header.Set("Origin", "http://example.com")
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Empty(t, resp.Header.Get("Access-Control-Allow-Origin"))
 }
 
 func TestMethodNotAllowed(t *testing.T) {

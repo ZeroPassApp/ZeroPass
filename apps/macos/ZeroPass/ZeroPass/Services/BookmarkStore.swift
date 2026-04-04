@@ -1,7 +1,6 @@
 import Foundation
 
-@MainActor
-final class BookmarkStore {
+nonisolated final class BookmarkStore {
     private let defaults = UserDefaults.standard
     private let key = "vaultBookmark"
 

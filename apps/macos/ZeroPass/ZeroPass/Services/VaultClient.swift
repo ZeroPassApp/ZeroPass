@@ -33,7 +33,7 @@ final class VaultClient: ObservableObject {
         didSet { UserDefaults.standard.set(clipboardAutoClearSeconds, forKey: "clipboardAutoClearSeconds") }
     }
 
-    private let keychain = KeychainService()
+    private let keychain: any KeychainStoring
     private let biometrics = BiometricService()
     private let autoLock = AutoLockService()
 
@@ -53,7 +53,7 @@ final class VaultClient: ObservableObject {
     @Published var syncEnabled: Bool {
         didSet {
             UserDefaults.standard.set(syncEnabled, forKey: "syncEnabled")
-            if !syncEnabled {
+            if !syncEnabled && !suppressSyncDisableCleanup {
                 disableSyncConfigOnDisk()
             }
         }
@@ -67,9 +67,7 @@ final class VaultClient: ObservableObject {
         didSet { UserDefaults.standard.set(syncDeviceID, forKey: "syncDeviceID") }
     }
 
-    @Published var syncAPIKey: String {
-        didSet { UserDefaults.standard.set(syncAPIKey, forKey: "syncAPIKey") }
-    }
+    @Published var syncAPIKey: String
 
     @Published var syncDeviceName: String {
         didSet { UserDefaults.standard.set(syncDeviceName, forKey: "syncDeviceName") }
@@ -79,6 +77,7 @@ final class VaultClient: ObservableObject {
     @Published private(set) var syncStatus: String?
 
     private var syncLastSyncTimeNanos: Int64 = 0
+    private var suppressSyncDisableCleanup = false
 
     @Published var lockOnSleepEnabled: Bool {
         didSet {
@@ -94,7 +93,8 @@ final class VaultClient: ObservableObject {
         }
     }
 
-    init() {
+    init(keychain: any KeychainStoring = KeychainService()) {
+	    self.keychain = keychain
         if UserDefaults.standard.object(forKey: "biometricUnlockEnabled") == nil {
             self.biometricUnlockEnabled = false
         } else {
@@ -112,8 +112,8 @@ final class VaultClient: ObservableObject {
             UserDefaults.standard.set(id, forKey: "syncDeviceID")
         }
 
-        self.syncAPIKey = UserDefaults.standard.string(forKey: "syncAPIKey") ?? ""
-        self.syncDeviceName = UserDefaults.standard.string(forKey: "syncDeviceName") ?? Host.current().localizedName ?? "Mac"
+        self.syncAPIKey = ""
+        self.syncDeviceName = UserDefaults.standard.string(forKey: "syncDeviceName") ?? Self.defaultDeviceName()
 
         self.syncLastSyncedAt = nil
         self.syncStatus = nil
@@ -146,6 +146,13 @@ final class VaultClient: ObservableObject {
             Task { await self?.lock() }
         }
         configureAutoLock()
+    }
+
+    deinit {
+        MainActor.assumeIsolated {
+            autoLock.stop()
+            endSecurityScopedAccess()
+        }
     }
 
     var vaultPathDisplay: String {
@@ -185,6 +192,7 @@ final class VaultClient: ObservableObject {
         authFlowError = nil
 
         loadSyncConfigFromDisk()
+        try? await rehydrateSyncClientFromStoredSecretIfNeeded()
         try? bookmarks.saveVaultURL(url)
     }
 
@@ -205,6 +213,7 @@ final class VaultClient: ObservableObject {
         authFlowError = nil
 
         loadSyncConfigFromDisk()
+        try? await rehydrateSyncClientFromStoredSecretIfNeeded()
         try? bookmarks.saveVaultURL(url)
     }
 
@@ -244,6 +253,7 @@ final class VaultClient: ObservableObject {
 
             resetSyncFromVault()
             loadSyncConfigFromDisk()
+                try? await rehydrateSyncClientFromStoredSecretIfNeeded()
             try? bookmarks.saveVaultURL(url)
         } catch {
             url.stopAccessingSecurityScopedResource()
@@ -644,6 +654,7 @@ final class VaultClient: ObservableObject {
 
     func applySyncConfig() async throws {
         guard let h = handle else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
+	    guard let url = vaultURL else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
 
         if !syncEnabled {
             disableSyncConfigOnDisk()
@@ -665,9 +676,27 @@ final class VaultClient: ObservableObject {
             lastSyncTime: syncLastSyncTimeNanos > 0 ? syncLastSyncTimeNanos : nil
         )
 
-        try await Task.detached(priority: .userInitiated) {
-            try ZPBridge.syncSetup(handle: h, config: cfg)
-        }.value
+        let previousAPIKey = (try keychain.loadSyncAPIKey(for: url) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        do {
+            if apiKey.isEmpty {
+                try keychain.deleteSyncAPIKey(for: url)
+            } else {
+                try keychain.storeSyncAPIKey(apiKey, for: url)
+            }
+
+            try await Task.detached(priority: .userInitiated) {
+                try ZPBridge.syncSetup(handle: h, config: cfg)
+            }.value
+        } catch {
+            if previousAPIKey.isEmpty {
+                try? keychain.deleteSyncAPIKey(for: url)
+            } else {
+                try? keychain.storeSyncAPIKey(previousAPIKey, for: url)
+            }
+            throw error
+        }
 
         loadSyncConfigFromDisk()
         syncStatus = "Saved"
@@ -676,6 +705,7 @@ final class VaultClient: ObservableObject {
 
     func syncRegisterDevice() async throws {
         guard let h = handle else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
+        try await rehydrateSyncClientFromStoredSecretIfNeeded()
         let name = syncDeviceName.trimmingCharacters(in: .whitespacesAndNewlines)
         if name.isEmpty {
             throw ZPBridgeError(code: .internalError, message: "Device name must not be empty")
@@ -692,6 +722,7 @@ final class VaultClient: ObservableObject {
 
     func syncNow() async throws {
         guard let h = handle else { throw ZPBridgeError(code: .notFound, message: "No vault open") }
+	    try await rehydrateSyncClientFromStoredSecretIfNeeded()
 
         let resp = try await Task.detached(priority: .userInitiated) {
             try ZPBridge.syncFull(handle: h)
@@ -718,15 +749,19 @@ final class VaultClient: ObservableObject {
     }
 
     private func resetSyncFromVault() {
+        syncAPIKey = ""
         syncLastSyncTimeNanos = 0
         syncLastSyncedAt = nil
         syncStatus = nil
     }
 
     private func disableSyncConfigOnDisk() {
-        guard let url = vaultURL else { return }
-        let fp = url.appendingPathComponent("sync.json")
-        try? FileManager.default.removeItem(at: fp)
+        if let url = vaultURL {
+            try? keychain.deleteSyncAPIKey(for: url)
+            try? FileManager.default.removeItem(at: syncConfigURL(for: url))
+        }
+        UserDefaults.standard.removeObject(forKey: "syncAPIKey")
+        syncAPIKey = ""
         syncLastSyncTimeNanos = 0
         syncLastSyncedAt = nil
         syncStatus = nil
@@ -734,10 +769,16 @@ final class VaultClient: ObservableObject {
 
     private func loadSyncConfigFromDisk() {
         guard let url = vaultURL else { return }
+        suppressSyncDisableCleanup = true
+        defer { suppressSyncDisableCleanup = false }
 
-        let fp = url.appendingPathComponent("sync.json")
+        migrateLegacySyncAPIKeyIfNeeded(for: url)
+
+        let fp = syncConfigURL(for: url)
         guard let data = try? Data(contentsOf: fp) else {
-            // Keep current values (UserDefaults-backed). Sync is considered disabled.
+            syncServerURL = ""
+            syncAPIKey = ""
+            syncEnabled = false
             syncLastSyncTimeNanos = 0
             syncLastSyncedAt = nil
             syncStatus = nil
@@ -748,7 +789,7 @@ final class VaultClient: ObservableObject {
             let cfg = try JSONDecoder().decode(ZPBridge.SyncConfig.self, from: data)
             syncServerURL = cfg.serverURL
             syncDeviceID = cfg.deviceID
-            syncAPIKey = cfg.apiKey ?? ""
+            syncAPIKey = (try? keychain.loadSyncAPIKey(for: url)) ?? ""
             syncLastSyncTimeNanos = cfg.lastSyncTime ?? 0
 
             if syncLastSyncTimeNanos > 0 {
@@ -758,8 +799,116 @@ final class VaultClient: ObservableObject {
             }
             syncEnabled = !cfg.serverURL.isEmpty && !cfg.deviceID.isEmpty
         } catch {
+            syncServerURL = ""
+            syncDeviceID = ""
+            syncAPIKey = ""
+            syncEnabled = false
+            syncLastSyncTimeNanos = 0
+            syncLastSyncedAt = nil
             syncStatus = "Failed to read sync config"
         }
+    }
+
+    private func rehydrateSyncClientFromStoredSecretIfNeeded() async throws {
+        guard syncEnabled else { return }
+        guard let h = handle else { return }
+        guard let url = vaultURL else { return }
+
+        let server = syncServerURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let device = syncDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !server.isEmpty, !device.isEmpty else { return }
+
+        let apiKey = (try keychain.loadSyncAPIKey(for: url) ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        syncAPIKey = apiKey
+
+        let cfg = ZPBridge.SyncConfig(
+            serverURL: server,
+            deviceID: device,
+            apiKey: apiKey.isEmpty ? nil : apiKey,
+            lastSyncTime: syncLastSyncTimeNanos > 0 ? syncLastSyncTimeNanos : nil
+        )
+
+        try await Task.detached(priority: .utility) {
+            try ZPBridge.syncSetup(handle: h, config: cfg)
+        }.value
+    }
+
+    func migrateLegacySyncAPIKeyIfNeeded(for url: URL) {
+        let legacyDefaultsKey = UserDefaults.standard.string(forKey: "syncAPIKey")?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let configURL = syncConfigURL(for: url)
+
+        let legacyConfig: ZPBridge.SyncConfig?
+        if let data = try? Data(contentsOf: configURL) {
+            legacyConfig = try? JSONDecoder().decode(ZPBridge.SyncConfig.self, from: data)
+        } else {
+            legacyConfig = nil
+        }
+
+        let storedKeychainKey = (try? keychain.loadSyncAPIKey(for: url))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let legacyDiskKey = legacyConfig?.apiKey?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let legacyDefaultsCandidate = legacyConfig == nil ? nil : legacyDefaultsKey
+
+        let candidate = [storedKeychainKey, legacyDiskKey, legacyDefaultsCandidate]
+            .compactMap { value -> String? in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }
+            .first
+
+        let hasStoredKeychainKey = storedKeychainKey?.isEmpty == false
+        var migratedToKeychain = hasStoredKeychainKey
+
+        if !hasStoredKeychainKey, let candidate {
+            do {
+                try keychain.storeSyncAPIKey(candidate, for: url)
+                migratedToKeychain = true
+            } catch {
+                return
+            }
+        }
+
+        if migratedToKeychain, let legacyConfig, legacyConfig.apiKey != nil {
+            try? persistMetadataOnlySyncConfig(legacyConfig, to: configURL)
+        }
+
+        if migratedToKeychain {
+            UserDefaults.standard.removeObject(forKey: "syncAPIKey")
+        }
+    }
+
+    func syncConfigURL(for url: URL) -> URL {
+        url.appendingPathComponent("sync.json")
+    }
+
+    func persistMetadataOnlySyncConfig(_ cfg: ZPBridge.SyncConfig, to url: URL) throws {
+        let metadataOnly = ZPBridge.SyncConfig(
+            serverURL: cfg.serverURL,
+            deviceID: cfg.deviceID,
+            apiKey: nil,
+            lastSyncTime: cfg.lastSyncTime
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(metadataOnly)
+        try data.write(to: url, options: .atomic)
+    }
+
+    private static func defaultDeviceName() -> String {
+        let hostName = ProcessInfo.processInfo.hostName
+            .split(separator: ".", maxSplits: 1, omittingEmptySubsequences: true)
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let hostName, !hostName.isEmpty {
+            return hostName
+        }
+        return "Mac"
     }
 
     // MARK: - Security scoped access

@@ -748,6 +748,33 @@ func TestUnlockWithRecoveryAutoRotation(t *testing.T) {
 	v.Lock()
 }
 
+func TestUnlockWithRecoveryFailsClosedWhenRotationPersistenceFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod-based failure injection is not portable on Windows")
+	}
+
+	dir := testVaultDir(t)
+	cfg := DefaultConfig()
+	cfg.AutoLockTimeout = 0
+
+	v, result, err := Create("pass", dir, cfg)
+	require.NoError(t, err)
+	v.Lock()
+
+	require.NoError(t, os.Chmod(dir, 0500))
+	defer os.Chmod(dir, 0700)
+
+	_, err = v.UnlockWithRecovery(result.Mnemonic)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "rotate recovery key")
+	assert.True(t, v.IsLocked())
+	assert.Nil(t, v.vaultKey)
+
+	require.NoError(t, os.Chmod(dir, 0700))
+	err = v.ValidateRecovery(result.Mnemonic)
+	assert.NoError(t, err)
+}
+
 func TestValidateRecovery(t *testing.T) {
 	dir := testVaultDir(t)
 	cfg := DefaultConfig()

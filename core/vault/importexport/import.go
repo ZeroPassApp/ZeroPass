@@ -487,11 +487,13 @@ func Import1PUX(reader io.Reader) ([]types.Item, error) {
 			for _, wrapper := range vault.Items {
 				src := wrapper.Item
 				item := types.Item{
-					ID:     src.UUID,
 					Type:   map1PUXType(src.TypeName),
 					Name:   src.Title,
 					Fields: make(map[string]string),
 					Notes:  src.Details.NotesPlain,
+				}
+				if err := types.ValidateItemID(src.UUID); err == nil {
+					item.ID = src.UUID
 				}
 
 				// URL from overview.

@@ -43,5 +43,6 @@ xcuserdata/
 index.db
 index.db-*
 items/
+sync.json
 vault.json
 vault.lock

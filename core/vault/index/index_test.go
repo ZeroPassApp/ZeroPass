@@ -28,7 +28,7 @@ func sampleItems() []*types.Item {
 			Name: "GitHub",
 			Fields: map[string]string{
 				types.FieldUsername: "devuser",
-				types.FieldURL:     "https://github.com",
+				types.FieldURL:      "https://github.com",
 			},
 			Tags:  []string{"dev", "work"},
 			Notes: "main development account",
@@ -39,15 +39,15 @@ func sampleItems() []*types.Item {
 			Name: "AWS Console",
 			Fields: map[string]string{
 				types.FieldUsername: "admin",
-				types.FieldURL:     "https://aws.amazon.com",
+				types.FieldURL:      "https://aws.amazon.com",
 			},
 			Tags:  []string{"cloud", "work"},
 			Notes: "production AWS account",
 		},
 		{
-			ID:   "id-3",
-			Type: types.ItemTypeSecureNote,
-			Name: "Recovery Codes",
+			ID:    "id-3",
+			Type:  types.ItemTypeSecureNote,
+			Name:  "Recovery Codes",
 			Notes: "backup codes for various services",
 			Tags:  []string{"personal"},
 		},
@@ -73,17 +73,21 @@ func TestAddAndSearch(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, ids, 2) // GitHub and AWS
 
-	// Search by notes
+	// Notes are intentionally excluded from the plaintext index.
 	ids, err = idx.Search("production")
 	require.NoError(t, err)
-	require.Len(t, ids, 1)
-	assert.Equal(t, "id-2", ids[0])
+	assert.Empty(t, ids)
 
-	// Search by field values
+	// Search by allowlisted field values
 	ids, err = idx.Search("devuser")
 	require.NoError(t, err)
 	require.Len(t, ids, 1)
 	assert.Equal(t, "id-1", ids[0])
+
+	// Secret-bearing values must not be indexed.
+	ids, err = idx.Search("account")
+	require.NoError(t, err)
+	assert.Empty(t, ids)
 }
 
 func TestSearchNoResults(t *testing.T) {
@@ -164,7 +168,7 @@ func TestRebuildIndex(t *testing.T) {
 	items[0].Name = "ModifiedName"
 	items[0].Fields = map[string]string{
 		types.FieldUsername: "newuser",
-		types.FieldURL:     "https://example.com",
+		types.FieldURL:      "https://example.com",
 	}
 	items[0].Notes = "modified notes"
 
@@ -227,7 +231,7 @@ func TestSearchCustomFields(t *testing.T) {
 
 	ids, err = idx.Search("staging")
 	require.NoError(t, err)
-	assert.Len(t, ids, 1)
+	assert.Empty(t, ids)
 }
 
 func TestOpenExistingDB(t *testing.T) {
@@ -262,8 +266,8 @@ func TestSearchMultipleTerms(t *testing.T) {
 		require.NoError(t, idx.AddToIndex(item))
 	}
 
-	// "AWS production" — both terms in id-2
-	ids, err := idx.Search("AWS production")
+	// "AWS admin" — both terms are still indexed under the narrowed policy.
+	ids, err := idx.Search("AWS admin")
 	require.NoError(t, err)
 	assert.Len(t, ids, 1)
 	assert.Equal(t, "id-2", ids[0])
@@ -559,7 +563,7 @@ func TestAddToIndexItemWithAllFields(t *testing.T) {
 		Fields: map[string]string{
 			types.FieldUsername: "fulluser",
 			types.FieldPassword: "fullpass",
-			types.FieldURL:     "https://full.example.com",
+			types.FieldURL:      "https://full.example.com",
 		},
 		CustomFields: map[string]string{
 			"department": "engineering",
@@ -570,11 +574,72 @@ func TestAddToIndexItemWithAllFields(t *testing.T) {
 	}
 	require.NoError(t, idx.AddToIndex(item))
 
-	// Search by each field
-	for _, q := range []string{"FullItem", "fulluser", "engineering", "backend", "production", "comprehensive"} {
+	// Search by safe indexed fields only.
+	for _, q := range []string{"FullItem", "fulluser", "department", "production", "critical"} {
 		ids, err := idx.Search(q)
 		require.NoError(t, err, "search for %q should not error", q)
 		assert.Len(t, ids, 1, "search for %q should return 1 result", q)
+	}
+
+	for _, q := range []string{"engineering", "backend", "comprehensive", "fullpass"} {
+		ids, err := idx.Search(q)
+		require.NoError(t, err, "search for %q should not error", q)
+		assert.Empty(t, ids, "search for %q should not index sensitive values", q)
+	}
+}
+
+func TestEnsureCurrentPolicyRebuildsLegacyIndex(t *testing.T) {
+	idx := testIndex(t)
+
+	res, err := idx.db.Exec(
+		`INSERT INTO items_fts (name, type, tags, notes, custom_keys, field_values) VALUES (?, ?, ?, ?, ?, ?)`,
+		"Legacy AWS",
+		string(types.ItemTypeLogin),
+		"ops",
+		"production account note",
+		"environment",
+		"legacy-user staging leaked-secret",
+	)
+	require.NoError(t, err)
+	rowid, err := res.LastInsertId()
+	require.NoError(t, err)
+	_, err = idx.db.Exec(`INSERT INTO items_map (item_id, fts_rowid) VALUES (?, ?)`, "legacy-1", rowid)
+	require.NoError(t, err)
+	_, err = idx.db.Exec(`DELETE FROM index_meta WHERE key = ?`, searchPolicyVersionKey)
+	require.NoError(t, err)
+
+	ids, err := idx.Search("staging")
+	require.NoError(t, err)
+	require.Len(t, ids, 1)
+
+	err = idx.EnsureCurrentPolicy(func() ([]*types.Item, error) {
+		return []*types.Item{{
+			ID:   "legacy-1",
+			Type: types.ItemTypeLogin,
+			Name: "Legacy AWS",
+			Fields: map[string]string{
+				types.FieldUsername: "legacy-user",
+				types.FieldPassword: "leaked-secret",
+			},
+			Tags:         []string{"ops"},
+			Notes:        "production account note",
+			CustomFields: map[string]string{"environment": "staging"},
+		}}, nil
+	})
+	require.NoError(t, err)
+
+	ids, err = idx.Search("user")
+	require.NoError(t, err)
+	assert.Len(t, ids, 1)
+
+	ids, err = idx.Search("environment")
+	require.NoError(t, err)
+	assert.Len(t, ids, 1)
+
+	for _, q := range []string{"staging", "leaked-secret", "production"} {
+		ids, err = idx.Search(q)
+		require.NoError(t, err)
+		assert.Empty(t, ids, "legacy token %q should be purged by migration", q)
 	}
 }
 

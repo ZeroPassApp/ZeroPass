@@ -237,9 +237,9 @@ func TestMapBitwardenType(t *testing.T) {
 	assert.Equal(t, types.ItemTypeSecureNote, mapBitwardenType(2))
 	assert.Equal(t, types.ItemTypeCreditCard, mapBitwardenType(3))
 	assert.Equal(t, types.ItemTypeIdentity, mapBitwardenType(4))
-	assert.Equal(t, types.ItemTypeLogin, mapBitwardenType(99))   // default
-	assert.Equal(t, types.ItemTypeLogin, mapBitwardenType(0))    // default
-	assert.Equal(t, types.ItemTypeLogin, mapBitwardenType(-1))   // default
+	assert.Equal(t, types.ItemTypeLogin, mapBitwardenType(99)) // default
+	assert.Equal(t, types.ItemTypeLogin, mapBitwardenType(0))  // default
+	assert.Equal(t, types.ItemTypeLogin, mapBitwardenType(-1)) // default
 }
 
 // errorWriter always returns an error on Write.
@@ -852,8 +852,8 @@ func TestImport1PUXTypeMappings(t *testing.T) {
 	assert.Equal(t, types.ItemTypeCreditCard, items[1].Type)
 	assert.Equal(t, types.ItemTypeSecureNote, items[2].Type)
 	assert.Equal(t, types.ItemTypeIdentity, items[3].Type)
-	assert.Equal(t, types.ItemTypeLogin, items[4].Type)      // 005 -> Login
-	assert.Equal(t, types.ItemTypeLogin, items[5].Type)      // unknown -> Login
+	assert.Equal(t, types.ItemTypeLogin, items[4].Type) // 005 -> Login
+	assert.Equal(t, types.ItemTypeLogin, items[5].Type) // unknown -> Login
 }
 
 func TestImport1PUXMissingOptionalFields(t *testing.T) {
@@ -929,6 +929,30 @@ func TestImport1PUXSectionFieldsIgnoreEmpty(t *testing.T) {
 	require.Len(t, items, 1)
 	require.Len(t, items[0].CustomFields, 1)
 	assert.Equal(t, "value1", items[0].CustomFields["filled"])
+}
+
+func TestImport1PUXUnsafeUUIDIsDropped(t *testing.T) {
+	data := `{
+		"accounts": [{
+			"vaults": [{
+				"items": [{
+					"item": {
+						"uuid": "../escape",
+						"typeName": "001",
+						"title": "Unsafe",
+						"overview": {},
+						"details": {}
+					}
+				}]
+			}]
+		}]
+	}`
+
+	items, err := Import1PUX(strings.NewReader(data))
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Empty(t, items[0].ID)
+	assert.Equal(t, "Unsafe", items[0].Name)
 }
 
 func TestMap1PUXType(t *testing.T) {

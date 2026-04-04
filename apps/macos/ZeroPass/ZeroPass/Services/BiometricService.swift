@@ -15,7 +15,7 @@ enum BiometricError: LocalizedError {
     }
 }
 
-final class BiometricService {
+nonisolated final class BiometricService {
     func isAvailable() -> Bool {
         var err: NSError?
         return LAContext().canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &err)
