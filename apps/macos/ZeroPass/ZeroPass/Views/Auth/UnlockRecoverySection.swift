@@ -3,6 +3,7 @@ import SwiftUI
 struct UnlockRecoverySection: View {
     @Binding var mnemonic: String
 
+    let focusRequestID: UUID
     let showErrorHighlight: Bool
 
     @FocusState private var isRecoveryFocused: Bool
@@ -37,6 +38,7 @@ struct UnlockRecoverySection: View {
                     .scrollContentBackground(.hidden)
                     .focused($isRecoveryFocused)
                     .autocorrectionDisabled()
+                    .privacySensitive()
                     .padding(8)
                     .frame(minHeight: ZPTheme.authEditorMinHeight)
                     .accessibilityLabel("Recovery phrase")
@@ -54,6 +56,11 @@ struct UnlockRecoverySection: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear {
+            DispatchQueue.main.async {
+                isRecoveryFocused = true
+            }
+        }
+        .onChange(of: focusRequestID) { _, _ in
             DispatchQueue.main.async {
                 isRecoveryFocused = true
             }

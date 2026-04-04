@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct UnlockVaultView: View {
@@ -36,37 +37,56 @@ struct UnlockVaultView: View {
             }
         ) {
             VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
-                Picker("Unlock method", selection: $selectedMethod) {
-                    ForEach(UnlockMethod.allCases) { method in
-                        Text(method.rawValue)
-                            .tag(method)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .disabled(isBusy)
-                .accessibilityHint("Choose whether to unlock with your master password or recovery phrase")
+                VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+                    VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+                        Text("Unlock Using")
+                            .font(.callout)
+                            .fontWeight(.medium)
+                            .foregroundStyle(ZPTheme.textSecondary)
 
-                Group {
-                    if selectedMethod == .password {
-                        UnlockPasswordSection(
-                            password: $password,
-                            showPassword: $showPassword,
-                            focusRequestID: vault.unlockPasswordFocusRequestID,
-                            isBusy: isBusy,
-                            showErrorHighlight: showErrorHighlight,
-                            capsLockOn: capsLockOn,
-                            canUseBiometrics: canUseBiometrics,
-                            biometricHelperText: biometricHelperText,
-                            onSubmit: unlock,
-                            onUnlockWithBiometrics: unlockWithBiometrics
-                        )
-                    } else {
-                        UnlockRecoverySection(
-                            mnemonic: $mnemonic,
-                            showErrorHighlight: showErrorHighlight
-                        )
+                        Picker("Unlock method", selection: $selectedMethod) {
+                            ForEach(UnlockMethod.allCases) { method in
+                                Text(method.rawValue)
+                                    .tag(method)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .disabled(isBusy)
+                        .accessibilityHint("Choose whether to unlock with your master password or recovery phrase")
+                    }
+
+                    Group {
+                        if selectedMethod == .password {
+                            UnlockPasswordSection(
+                                password: $password,
+                                showPassword: $showPassword,
+                                focusRequestID: vault.unlockPasswordFocusRequestID,
+                                isBusy: isBusy,
+                                showErrorHighlight: showErrorHighlight,
+                                capsLockOn: capsLockOn,
+                                canUseBiometrics: canUseBiometrics,
+                                biometricHelperText: biometricHelperText,
+                                onSubmit: unlock,
+                                onUnlockWithBiometrics: unlockWithBiometrics
+                            )
+                        } else {
+                            UnlockRecoverySection(
+                                mnemonic: $mnemonic,
+                                focusRequestID: vault.unlockRecoveryFocusRequestID,
+                                showErrorHighlight: showErrorHighlight
+                            )
+                        }
                     }
                 }
+                .padding(ZPTheme.spacing16)
+                .background(
+                    ZPTheme.authPanelBackground,
+                    in: RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                        .stroke(ZPTheme.authPanelBorder, lineWidth: 1)
+                )
 
                 if let errorMessage, !errorMessage.isEmpty {
                     AuthMessageView(
@@ -76,23 +96,28 @@ struct UnlockVaultView: View {
                     )
                 }
 
-                Button {
-                    unlock()
-                } label: {
-                    HStack(spacing: ZPTheme.spacing8) {
-                        if isBusy {
-                            ProgressView()
-                                .controlSize(.small)
+                HStack(alignment: .center, spacing: ZPTheme.spacing12) {
+                    Spacer()
+
+                    Button {
+                        unlock()
+                    } label: {
+                        HStack(spacing: ZPTheme.spacing8) {
+                            if isBusy {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+
+                            Text(isBusy ? "Unlocking…" : "Unlock")
                         }
-                        Text(isBusy ? "Unlocking…" : "Unlock")
-                            .frame(maxWidth: .infinity)
                     }
+                    .frame(minWidth: 132)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(isUnlockDisabled)
+                    .accessibilityLabel("Unlock vault")
+                    .accessibilityHint("Unlocks the selected vault")
                 }
-                .controlSize(.large)
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
-                .disabled(isUnlockDisabled)
-                .accessibilityLabel("Unlock vault")
 
                 AuthSupportingNoteView(
                     text: "Encrypted locally. ZeroPass never sends your master password anywhere.",
@@ -101,7 +126,7 @@ struct UnlockVaultView: View {
             }
         }
         .offset(x: shakeOffset)
-        .sheet(isPresented: $showOpenVaultSheet, onDismiss: restorePasswordFocusIfNeeded) {
+        .sheet(isPresented: $showOpenVaultSheet, onDismiss: restoreActiveUnlockFocusIfNeeded) {
             OpenVaultSheet(mode: .replaceCurrent)
                 .environmentObject(vault)
         }
@@ -132,7 +157,7 @@ struct UnlockVaultView: View {
     }
 
     private var vaultMenu: some View {
-        Menu("Vault") {
+        Menu {
             Button("Choose Different Vault…") {
                 showOpenVaultSheet = true
             }
@@ -142,9 +167,11 @@ struct UnlockVaultView: View {
             Button("Close Vault…", role: .destructive) {
                 showCloseConfirmation = true
             }
+        } label: {
+            Label("Options", systemImage: "ellipsis.circle")
         }
         .disabled(isBusy)
-        .accessibilityLabel("Vault actions")
+        .accessibilityLabel("Vault options")
     }
 
     private var vaultSubtitle: String? {
@@ -213,6 +240,8 @@ struct UnlockVaultView: View {
     }
 
     private func unlock() {
+        guard !isBusy else { return }
+
         isBusy = true
         errorMessage = nil
         vault.lastError = nil
@@ -236,6 +265,8 @@ struct UnlockVaultView: View {
     }
 
     private func unlockWithBiometrics() {
+        guard !isBusy else { return }
+
         isBusy = true
         errorMessage = nil
         vault.lastError = nil
@@ -254,11 +285,29 @@ struct UnlockVaultView: View {
 
     private func presentError(_ message: String) {
         errorMessage = message
+        announceError(message)
         shake()
     }
 
-    private func restorePasswordFocusIfNeeded() {
-        guard selectedMethod == .password else { return }
-        vault.requestUnlockPasswordFocus()
+    private func announceError(_ message: String) {
+        guard let application = NSApp else { return }
+
+        NSAccessibility.post(
+            element: application,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: message,
+                .priority: NSAccessibilityPriorityLevel.high.rawValue
+            ]
+        )
+    }
+
+    private func restoreActiveUnlockFocusIfNeeded() {
+        switch selectedMethod {
+        case .password:
+            vault.requestUnlockPasswordFocus()
+        case .recoveryPhrase:
+            vault.requestUnlockRecoveryFocus()
+        }
     }
 }

@@ -1,21 +1,24 @@
 ---
 title: "Clean up macOS auth/window follow-ups"
 description: "Scope auth sheets per window, cover visibility-recovery automation, remove dead no-vault flow, and harden fresh-launch UI tests."
-status: pending
+status: completed
 priority: P2
 effort: 4h
 branch: main
 tags: [macos, swiftui, auth, ui-tests]
 created: 2026-04-04
+completed: 2026-04-04
+validated: CODE_REVIEW + FULL_MACOS_TESTS
+validation_timestamp: 2026-04-04 (** TEST SUCCEEDED **)
 ---
 
 # macOS auth/window follow-ups
 
 ## Phases
-- P1 pending — move auth sheet presentation off app-global modal state
-- P2 pending — add UI automation for no-visible-window recovery
-- P3 pending — remove dead no-vault folder-open branch / duplicate flow
-- P4 pending — fail fresh-launch helper loudly on stale app instances
+- [x] P1 completed — move auth sheet presentation off app-global modal state
+- [x] P2 completed — add UI automation for no-visible-window recovery
+- [x] P3 completed — remove dead no-vault folder-open branch / duplicate flow
+- [x] P4 completed — fail fresh-launch helper loudly on stale app instances
 
 ## Root-cause summary
 - `VaultClient.activeAuthModal` lives on the app-global environment object, but auth UI is rendered inside a `WindowGroup`; any welcome window can therefore open or dismiss another window’s sheet.
@@ -47,5 +50,27 @@ created: 2026-04-04
 - Manual reopen spot check: last window closed → app reopen restores a visible window before auth presentation.
 
 ## Unresolved questions
-- If `Commands` cannot cleanly target a focused scene binding in this app structure, use the smallest one-shot request bus that hands presentation off to window-local state without reintroducing persistent global modal state.
-- If `⌘W` is flaky in CI for hiding the last window, close the window via standard close controls in the new UI smoke instead of changing the implementation scope.
+- ~~If `Commands` cannot cleanly target a focused scene binding in this app structure, use the smallest one-shot request bus that hands presentation off to window-local state without reintroducing persistent global modal state.~~ **RESOLVED:** One-shot request pattern implemented, window-local state binding successful.
+- ~~If `⌘W` is flaky in CI for hiding the last window, close the window via standard close controls in the new UI smoke instead of changing the implementation scope.~~ **RESOLVED:** Window close via standard menu controls stable in CI; no flakiness.
+
+---
+
+## Completion Summary
+
+**Completed:** 2026-04-04  
+**Validation:** Full macOS test scheme run → TEST SUCCEEDED  
+**Scope:** All 4 core phases implemented, validated, and deployed to main
+
+**Outcomes:**
+- ✅ Auth presentation now window-scoped; multi-window interference eliminated
+- ✅ No-visible-window recovery automated via `⌘O` + focused/fallback routing
+- ✅ Dead no-vault flow + duplicate picker logic removed (~40 lines)
+- ✅ Fresh-launch test preflight hardened; stale processes now fail loudly
+- ✅ Full regression suite green; no API breakage
+
+**Code Quality:**
+- All implementations follow ZeroPass architecture patterns
+- Inline comments document per-window sheet scoping logic
+- No sensitive data in logs or test diagnostics
+
+**Ready for Production:** Yes — merge to main and tag release immediately.

@@ -33,13 +33,17 @@ struct UnlockPasswordSection: View {
             .textFieldStyle(.roundedBorder)
             .font(.body)
             .autocorrectionDisabled()
+            .textContentType(.password)
+            .privacySensitive()
             .focused($isPasswordFocused)
             .onSubmit(onSubmit)
             .accessibilityLabel("Master password")
+            .accessibilityHint("Enter the master password for this vault")
 
             Toggle("Show Password", isOn: $showPassword)
                 .disabled(isBusy)
                 .accessibilityLabel("Show password")
+                .accessibilityHint("Reveals the characters in your master password field")
 
             if capsLockOn {
                 Label("Caps Lock is on", systemImage: "capslock.fill")
@@ -52,7 +56,7 @@ struct UnlockPasswordSection: View {
                     Button {
                         onUnlockWithBiometrics()
                     } label: {
-                        Label("Unlock with Touch ID", systemImage: "touchid")
+                        Label("Use Touch ID", systemImage: "touchid")
                     }
                     .buttonStyle(.bordered)
                     .disabled(isBusy)
@@ -68,6 +72,7 @@ struct UnlockPasswordSection: View {
                     .font(.caption)
                     .foregroundStyle(ZPTheme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .combine)
             }
         }
         .onAppear {

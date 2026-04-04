@@ -22,7 +22,7 @@ final class VaultClient: ObservableObject {
 
     @Published private(set) var state: State = .noVault
     @Published private(set) var unlockPasswordFocusRequestID = UUID()
-    @Published var activeAuthModal: AuthModal?
+    @Published private(set) var unlockRecoveryFocusRequestID = UUID()
     @Published var items: [VaultItem] = []
     @Published var selectedItemID: VaultItem.ID?
     @Published var lastError: String?
@@ -202,18 +202,8 @@ final class VaultClient: ObservableObject {
         unlockPasswordFocusRequestID = UUID()
     }
 
-    func presentCreateVaultSheet() {
-        authFlowError = nil
-        activeAuthModal = .createVault
-    }
-
-    func presentOpenVaultSheet() {
-        authFlowError = nil
-        activeAuthModal = .openVault
-    }
-
-    func dismissAuthModal() {
-        activeAuthModal = nil
+    func requestUnlockRecoveryFocus() {
+        unlockRecoveryFocusRequestID = UUID()
     }
 
     func restoreLastVaultIfAvailable() async {

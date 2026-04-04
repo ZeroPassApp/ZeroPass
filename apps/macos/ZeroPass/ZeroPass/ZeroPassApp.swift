@@ -12,6 +12,7 @@ import SwiftUI
 struct ZeroPassApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var vault = VaultClient()
+    @FocusedValue(\.welcomeAuthModal) private var focusedWelcomeAuthModal
     private let quickSearch = QuickSearchPanelController.shared
 
     @AppStorage("quickSearchKeyCode") private var quickSearchKeyCode: Int = Int(HotkeyService.Hotkey.quickSearchDefault.keyCode)
@@ -60,10 +61,9 @@ struct ZeroPassApp: App {
             CommandGroup(after: .newItem) {
                 Button(vault.hasVault ? "Choose Different Vault…" : "Open Vault…") {
                     if vault.hasVault {
-                        chooseVaultFolder(replacingCurrent: true)
+                        chooseReplacementVaultFolder()
                     } else {
-                        vault.presentOpenVaultSheet()
-                        appDelegate.revealMainWindowIfNeeded()
+                        presentWelcomeAuthModal(.openVault)
                     }
                 }
                 .keyboardShortcut("o", modifiers: [.command])
@@ -112,46 +112,68 @@ struct ZeroPassApp: App {
         }
     }
 
-    private func chooseVaultFolder(replacingCurrent: Bool) {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = false
+    private func presentWelcomeAuthModal(_ modal: VaultClient.AuthModal) {
+        vault.authFlowError = nil
 
-        guard panel.runModal() == .OK, let url = panel.url else {
+        if presentFocusedWelcomeAuthModal(modal) {
             return
         }
 
-        vault.lastError = nil
-        if !replacingCurrent {
-            vault.authFlowError = nil
+        Task { @MainActor in
+            if let window = await appDelegate.waitUntilMainWindowIsVisible() {
+                for _ in 0..<10 {
+                    if presentFocusedWelcomeAuthModal(modal) {
+                        return
+                    }
+
+                    NotificationCenter.default.post(
+                        name: .welcomeAuthModalRequest,
+                        object: window,
+                        userInfo: [WelcomeAuthModalRequest.notificationUserInfoKey: modal.rawValue]
+                    )
+
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+        }
+    }
+
+    private func presentFocusedWelcomeAuthModal(_ modal: VaultClient.AuthModal) -> Bool {
+        guard let focusedWelcomeAuthModal else {
+            return false
         }
 
-        Task {
+        focusedWelcomeAuthModal.wrappedValue = modal
+        return true
+    }
+
+    private func chooseReplacementVaultFolder() {
+        Task { @MainActor in
+            guard let url = await VaultFolderPicker.pickDirectory(canCreateDirectories: false) else {
+                return
+            }
+
+            vault.lastError = nil
+
             do {
-                if replacingCurrent {
-                    try await vault.replaceVault(with: url)
-                } else {
-                    try await vault.openVault(url)
-                }
+                try await vault.replaceVault(with: url)
             } catch {
-                if replacingCurrent {
-                    vault.lastError = error.localizedDescription
-                } else {
-                    vault.authFlowError = error.localizedDescription
-                }
+                vault.lastError = error.localizedDescription
             }
         }
     }
 }
 
 @MainActor
-private final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     func revealMainWindowIfNeeded() {
         Task { @MainActor in
-            await ensureMainWindowVisible()
+            _ = await waitUntilMainWindowIsVisible()
         }
+    }
+
+    func waitUntilMainWindowIsVisible() async -> NSWindow? {
+        await ensureMainWindowVisible()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -159,7 +181,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if bringMainWindowToFrontIfAvailable() {
+        if bringMainWindowToFrontIfAvailable() != nil {
             return true
         }
 
@@ -167,17 +189,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    private func ensureMainWindowVisible() async {
+    private func ensureMainWindowVisible() async -> NSWindow? {
         NSApp.activate(ignoringOtherApps: true)
 
-        if bringMainWindowToFrontIfAvailable() {
-            return
+        if let window = bringMainWindowToFrontIfAvailable() {
+            return window
         }
 
         for _ in 0..<10 {
             try? await Task.sleep(nanoseconds: 100_000_000)
-            if bringMainWindowToFrontIfAvailable() {
-                return
+            if let window = bringMainWindowToFrontIfAvailable() {
+                return window
             }
         }
 
@@ -185,15 +207,17 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
 
         for _ in 0..<10 {
             try? await Task.sleep(nanoseconds: 100_000_000)
-            if bringMainWindowToFrontIfAvailable() {
-                return
+            if let window = bringMainWindowToFrontIfAvailable() {
+                return window
             }
         }
+
+        return nil
     }
 
-    private func bringMainWindowToFrontIfAvailable() -> Bool {
+    private func bringMainWindowToFrontIfAvailable() -> NSWindow? {
         guard let window = mainWindow else {
-            return false
+            return nil
         }
 
         NSApp.activate(ignoringOtherApps: true)
@@ -201,7 +225,7 @@ private final class AppDelegate: NSObject, NSApplicationDelegate {
             window.deminiaturize(nil)
         }
         window.makeKeyAndOrderFront(nil)
-        return true
+        return window
     }
 
     private var mainWindow: NSWindow? {

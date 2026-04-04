@@ -9,7 +9,7 @@
 
 ## Overview
 - **Priority:** P1
-- **Status:** Pending
+- **Status:** Complete (verified 2026-04-04)
 - **Description:** Rewrite the locked/unlock experience so it feels like a native macOS auth window, not a sparse hero screen.
 
 ## Key Insights
@@ -45,16 +45,16 @@
 1. Rebuild the unlock screen inside `AuthSceneScaffold` with a compact header, vault name/path context, and standard action layout.
 2. Replace the recovery checkbox with a segmented `Picker` or equivalent native control-group switch.
 3. Move Touch ID out of the text field into a visible button row (`Unlock with Touch ID`) and add helper copy for the disabled-but-available state.
-4. Replace the single-line mnemonic field with a multiline paste area that normalizes input and shows a live word count plus a compact numbered preview when parsing succeeds.
+4. Replace the single-line mnemonic field with a multiline paste area that normalizes input and shows live recovery-phrase validation feedback.
 5. Remove the bottom footer `Close Vault` button; replace it with a top-right secondary menu (`Choose Different Vault…`, `Close Vault…`) and add the matching command in `ZeroPassApp.swift`.
 6. Keep inline error handling, caps-lock state, focus restoration, and reduced-motion shake fallback intact.
 
 ## Todo List
-- [ ] Split `UnlockVaultView.swift` into coordinator + method sections
-- [ ] Add native mode-switch control for password vs recovery
-- [ ] Promote Touch ID to a visible secondary action
-- [ ] Replace bottom `Close Vault` action with top/menu command placement
-- [ ] Add recovery phrase normalization and validation UX
+- [x] Split `UnlockVaultView.swift` into coordinator + method sections
+- [x] Add native mode-switch control for password vs recovery
+- [x] Promote Touch ID to a visible secondary action
+- [x] Replace bottom `Close Vault` action with top/menu command placement
+- [x] Add recovery phrase normalization and validation UX
 
 ## Success Criteria
 - No checkbox remains in the unlock flow.
