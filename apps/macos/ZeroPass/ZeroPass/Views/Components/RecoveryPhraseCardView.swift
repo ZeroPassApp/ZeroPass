@@ -68,13 +68,28 @@ struct RecoveryPhraseCardView: View {
                     }
                 }
 
-                Text("Tip: keep a paper copy or save as an encrypted offline document.")
-                    .font(.caption)
-                    .foregroundStyle(ZPTheme.textSecondary)
+                HStack(spacing: ZPTheme.spacing8) {
+                    recoveryPill("Shown Once", systemImage: "eye.slash")
+                    recoveryPill("Save Offline", systemImage: "tray.and.arrow.down")
+                }
             }
             .textSelection(.enabled)
             .padding(ZPTheme.spacing18)
             .zpSurface(.elevated)
         }
+    }
+
+    @ViewBuilder
+    private func recoveryPill(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(ZPTheme.textSecondary)
+            .padding(.horizontal, ZPTheme.spacing10)
+            .padding(.vertical, ZPTheme.spacing8)
+            .background(ZPTheme.chipBackground, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(ZPTheme.panelBorder, lineWidth: 1)
+            )
     }
 }

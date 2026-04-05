@@ -1,7 +1,7 @@
 ---
 title: "ZeroPass Midnight Native macOS Redesign"
 description: "Implementation plan to restyle the existing SwiftUI macOS app around a premium native dark utility direction."
-status: pending
+status: in-progress
 priority: P1
 effort: 10d
 branch: main

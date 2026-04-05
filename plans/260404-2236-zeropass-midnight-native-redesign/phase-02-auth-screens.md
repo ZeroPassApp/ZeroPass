@@ -14,13 +14,14 @@
 
 ## Overview
 - **Priority:** P1
-- **Status:** Pending
+- **Status:** In Progress
 - **Description:** Bring welcome, unlock, create/open vault, and auth recovery presentation into a tighter, premium native flow with less dead space and clearer action hierarchy.
 
 ## Key Insights
 - The auth route is already structurally organized around `AuthSceneScaffold` and state-aware `ContentView` switching; this phase is mostly a design-system-and-layout pass, not a flow rewrite.
 - Stitch concepts exist for welcome, unlock, and recovery phrase, so this phase has strong visual guidance without needing to change app architecture.
 - `UnlockVaultView` already carries the right behaviors (password/recovery split, biometrics, vault menu, error handling); the redesign should make those behaviors feel more intentional and discoverable.
+- A focused unlock-screen polish slice has landed: hero-card centering, icon-first vault menu trigger, eye-based password visibility control, contextual Touch ID cues, and stronger error-highlight semantics.
 
 ## Requirements
 - Welcome and unlock views must immediately communicate “premium utility,” not sparse hero screen.
@@ -81,4 +82,5 @@
 - Keep destructive vault actions separated and clearly labeled even if they move visually.
 
 ## Next Steps
-- Move into the unlocked workspace, where the same token system needs to scale across sidebar, list, detail, and toolbar surfaces.
+- Finish the remaining auth-screen work: welcome, create/open vault, and recovery presentation alignment.
+- Then move into the unlocked workspace, where the same token system needs to scale across sidebar, list, detail, and toolbar surfaces.

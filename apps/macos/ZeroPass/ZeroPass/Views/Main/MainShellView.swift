@@ -79,9 +79,11 @@ struct MainShellView: View {
                 }
                 .help("New item")
                 .keyboardShortcut("n", modifiers: [.command])
+                .accessibilityIdentifier("mainShell.newItemButton")
             }
         }
         .background(ZPTheme.workspaceBackground)
+        .accessibilityIdentifier("mainShell.root")
         .sheet(isPresented: $showingNewItem) {
             ItemEditorView(item: VaultItem.new(type: .login))
                 .environmentObject(vault)

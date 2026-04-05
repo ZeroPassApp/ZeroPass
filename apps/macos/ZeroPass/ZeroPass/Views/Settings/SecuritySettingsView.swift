@@ -341,12 +341,33 @@ private struct RecoveryMnemonicSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
-            Text("New Recovery Phrase")
-                .font(.title2)
-                .fontWeight(.semibold)
+            HStack(alignment: .center, spacing: ZPTheme.spacing12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                        .fill(ZPTheme.accentSoft)
 
-            Text("Write this down before closing this window. It will not be shown again.")
-                .foregroundStyle(.secondary)
+                    Image(systemName: "key.horizontal.fill")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.orange)
+                }
+                .frame(width: 42, height: 42)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: ZPTheme.spacing4) {
+                    Text("New Recovery Phrase")
+                        .font(.title2.weight(.semibold))
+
+                    Text("Write this down before closing this window. It will not be shown again.")
+                        .foregroundStyle(ZPTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            AuthMessageView(
+                text: "This replaces the previous recovery phrase immediately. Save the new phrase offline before dismissing this sheet.",
+                systemImage: "exclamationmark.shield.fill",
+                tone: .warning
+            )
 
             RecoveryPhraseCardView(mnemonic: mnemonic)
 
@@ -368,12 +389,13 @@ private struct RecoveryMnemonicSheet: View {
                 Button("Done") {
                     dismiss()
                 }
+                .buttonStyle(.borderedProminent)
                 .disabled(!confirmed)
                 .keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)
         .background(ZPTheme.workspaceBackground)
-        .frame(width: 560)
+        .frame(width: 520)
     }
 }

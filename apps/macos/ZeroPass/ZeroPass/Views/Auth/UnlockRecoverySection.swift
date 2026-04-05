@@ -13,23 +13,13 @@ struct UnlockRecoverySection: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZPTheme.spacing12) {
-            Text("Recovery Phrase")
-                .font(.callout)
-                .fontWeight(.medium)
-                .foregroundStyle(showErrorHighlight ? ZPTheme.destructive : ZPTheme.textSecondary)
-
-            Text("Paste your 12-, 15-, 18-, 21-, or 24-word recovery phrase. Numbering and line breaks are okay.")
-                .font(.footnote)
-                .foregroundStyle(ZPTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
+        VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
             ZStack(alignment: .topLeading) {
                 if mnemonic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Paste your recovery phrase here")
+                    Text("Paste Recovery Phrase")
                         .foregroundStyle(ZPTheme.textTertiary)
-                        .padding(.top, 16)
-                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+                        .padding(.horizontal, 14)
                         .allowsHitTesting(false)
                 }
 
@@ -40,19 +30,19 @@ struct UnlockRecoverySection: View {
                     .autocorrectionDisabled()
                     .privacySensitive()
                     .padding(8)
-                    .frame(minHeight: ZPTheme.authEditorMinHeight)
+                    .frame(minHeight: 104)
                     .accessibilityLabel("Recovery phrase")
                     .accessibilityHint("Paste your recovery phrase to unlock the vault")
             }
             .padding(2)
-            .background(borderColor.opacity(showErrorHighlight ? 0.12 : 0.08), in: RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous))
+            .background(borderColor.opacity(showErrorHighlight ? 0.12 : 0.08), in: RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
                     .stroke(borderColor, lineWidth: borderWidth)
             )
 
             Label(summary.helperText, systemImage: summaryIcon)
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(summaryColor)
                 .fixedSize(horizontal: false, vertical: true)
         }

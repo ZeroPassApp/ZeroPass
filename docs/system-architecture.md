@@ -196,6 +196,8 @@ User wants to verify they still have the correct mnemonic
 
 > Bridge note: the CGO bridge disables the Go auto-lock timer at runtime (`DisableAutoLock()`); the host app is responsible for inactivity locking.
 
+> macOS UI-test note: `VaultFolderPicker.pickDirectory()` checks `UITEST_PICK_DIRECTORY_PATH` when `VaultClient.isRunningUITests` is active, letting UI automation drive deterministic create/open vault flows without `NSOpenPanel`. Combined with stable identifiers on the welcome, unlock, and main-shell views, `ZeroPassUITests.swift` now covers create → recovery phrase → unlocked shell plus existing-vault relaunch/open unlock paths.
+
 
 ---
 
@@ -578,6 +580,6 @@ CREATE TABLE devices (
 
 ---
 
-**Document Version:** 1.1  
-**Last Updated:** June 2025  
+**Document Version:** 1.2  
+**Last Updated:** April 2026  
 **Owner:** Architecture Team

@@ -10,7 +10,7 @@ ZeroPass is organized into 4 development phases, each building on the previous. 
 
 **Goal:** Shippable local credential vault with full encryption engine, functional CLI, and macOS SwiftUI app.
 
-**Status:** **COMPLETE / VERIFIED** — Core crypto and vault engine complete; CLI commands shipped; macOS app launched; 9-source import/export operational; validated by `go test ./...` and macOS `xcodebuild test`.
+**Status:** **COMPLETE / VERIFIED** — Core crypto and vault engine complete; CLI commands shipped; macOS app launched; 9-source import/export operational; the macOS auth family (welcome, unlock, create/open, recovery) has been refreshed toward the Stitch-approved desktop direction; validated by `go test ./...` and macOS `xcodebuild test`.
 
 **Timeline:** Target completion: Week 10 (April 15, 2026)
 
@@ -42,6 +42,7 @@ ZeroPass is organized into 4 development phases, each building on the previous. 
 - ✅ Comprehensive unit & integration tests (90%+ core modules)
 - ✅ Security documentation and threat model
 - ✅ macOS SwiftUI app: 9-source import via Settings, CSV export with EXPORT confirmation, VoiceOver labels, keyboard navigation (`@FocusState`), high contrast mode
+- ✅ macOS auth family visually aligned toward the April 2026 Stitch direction (welcome, unlock, create/open, recovery, deterministic UI coverage)
 
 ### In Scope
 
@@ -299,6 +300,6 @@ None — Phase 1 is foundational and independent.
 ---
 
 **Document Version:** 1.1  
-**Last Updated:** June 2025  
+**Last Updated:** April 5, 2026  
 **Next Review:** On Phase 2 completion  
 **Owner:** Product & Engineering

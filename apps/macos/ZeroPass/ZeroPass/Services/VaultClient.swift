@@ -209,6 +209,13 @@ final class VaultClient: ObservableObject {
     func restoreLastVaultIfAvailable() async {
         guard state == .noVault else { return }
         guard let url = bookmarks.loadVaultURL() else { return }
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            bookmarks.clear()
+            return
+        }
+
         do {
             try await openVault(url)
         } catch {

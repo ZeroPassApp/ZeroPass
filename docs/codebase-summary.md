@@ -2,12 +2,13 @@
 
 ## Overview
 
-ZeroPass codebase (~20K LOC, ~70 Go files) is organized into four tiers:
+ZeroPass codebase (~20K LOC, ~70 Go files plus the native macOS app) is organized into five tiers:
 
 1. **Core Layer** (`core/`) — Reusable crypto, vault, and sync engines
 2. **Bridge Layer** (`bridge/`) — CGO C ABI (Go `c-archive`) for native app integration
-3. **Packages Layer** (`packages/`) — CLI application and planned SDK
-4. **Services Layer** (`services/`) — Self-hosted sync server
+3. **Apps Layer** (`apps/`) — Native client applications
+4. **Packages Layer** (`packages/`) — CLI application and planned SDK
+5. **Services Layer** (`services/`) — Self-hosted sync server
 
 **Module Structure:**
 ```
@@ -17,6 +18,8 @@ github.com/zeropass/zeropass/
 │   ├── vault/       # Vault CRUD, search, versioning, health, import/export
 │   └── sync/        # Delta sync client/server, conflict resolution
 ├── bridge/          # CGO bridge (C ABI) for native apps (SwiftUI, etc.)
+├── apps/
+│   └── macos/       # SwiftUI macOS app consuming the Go bridge
 ├── packages/
 │   ├── cli/         # CLI application (Cobra-based)
 │   └── sdk/         # SDK (planned, empty)
@@ -191,6 +194,26 @@ Client: Re-pull and resolve locally if conflicts detected
 **Storage:**
 - Server: SQLite (sync_items table + devices table)
 - Client: JSON files + in-memory merge state
+
+---
+
+## Apps Layer
+
+### `/apps/macos/` — Native macOS App
+
+**Purpose:** SwiftUI desktop application for vault setup, unlock, item management, import/export, and sync-preview workflows, backed by the Go bridge.
+
+**Auth Surface Notes:**
+- `Views/Auth/UnlockVaultView.swift` coordinates the locked-state unlock flow and current vault context.
+- `Views/Auth/UnlockPasswordSection.swift` and `Views/Auth/UnlockRecoverySection.swift` keep password and recovery input chrome/focus behavior isolated from the parent unlock coordinator.
+- `Views/Auth/AuthWindowLayoutModifier.swift` applies compact auth-window sizing and locked/recovery titles, including the locked-state title `Unlock Vault`.
+- The latest macOS unlock-screen pass moved the locked state to a more literal Stitch composition: compact selected-vault chip, inner unlock panel, lighter footer meta, icon-only vault options affordance, and tighter field chrome.
+
+**Deterministic macOS UI-Test Coverage:**
+- `ZeroPassUITests.swift` now covers full auth/vault lifecycle happy paths: create vault → recovery phrase → unlocked shell, relaunch existing vault → locked state → unlock, and open existing vault → unlock.
+- `Views/Auth/OpenVaultSheet.swift` resolves `UITEST_PICK_DIRECTORY_PATH` in UI test mode so create/open flows can choose a deterministic vault directory without relying on `NSOpenPanel` automation.
+- Stable accessibility identifiers now span the welcome, unlock, and main-shell surfaces, including `welcome.createVaultButton`, `welcome.openVaultButton`, `unlockVault.passwordField`, `unlockVault.submitButton`, `mainShell.root`, and `mainShell.newItemButton`.
+- Fresh targeted validation passed via `xcodebuild test -project apps/macos/ZeroPass/ZeroPass.xcodeproj -scheme ZeroPass -destination 'platform=macOS,arch=arm64'` with code signing disabled.
 
 ---
 
@@ -414,6 +437,6 @@ v.Create(password)
 
 ---
 
-**Document Version:** 1.1  
-**Last Updated:** June 2025  
+**Document Version:** 1.2  
+**Last Updated:** April 2026  
 **Lines of Code:** ~20,000 (excluding tests)

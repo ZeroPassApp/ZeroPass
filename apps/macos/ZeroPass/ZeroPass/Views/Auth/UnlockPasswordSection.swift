@@ -9,75 +9,59 @@ struct UnlockPasswordSection: View {
     let isBusy: Bool
     let showErrorHighlight: Bool
     let capsLockOn: Bool
-    let canUseBiometrics: Bool
-    let biometricHelperText: String?
     let onSubmit: () -> Void
-    let onUnlockWithBiometrics: () -> Void
 
     @FocusState private var isPasswordFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ZPTheme.spacing12) {
-            Text("Master Password")
-                .font(.callout)
-                .fontWeight(.medium)
-                .foregroundStyle(showErrorHighlight ? ZPTheme.destructive : ZPTheme.textSecondary)
-
-            Group {
-                if showPassword {
-                    TextField("Enter your master password", text: $password)
-                } else {
-                    SecureField("Enter your master password", text: $password)
+        VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+            HStack(spacing: ZPTheme.spacing10) {
+                Group {
+                    if showPassword {
+                        TextField("Enter Master Password", text: $password)
+                            .accessibilityIdentifier("unlockVault.passwordField")
+                    } else {
+                        SecureField("Enter Master Password", text: $password)
+                            .accessibilityIdentifier("unlockVault.passwordField")
+                    }
                 }
-            }
-            .textFieldStyle(.plain)
-            .font(.body.weight(.medium))
-            .autocorrectionDisabled()
-            .textContentType(.password)
-            .privacySensitive()
-            .focused($isPasswordFocused)
-            .onSubmit(onSubmit)
-            .accessibilityLabel("Master password")
-            .accessibilityHint("Enter the master password for this vault")
-            .padding(.horizontal, ZPTheme.spacing14)
-            .padding(.vertical, ZPTheme.spacing12)
-            .frame(minHeight: ZPTheme.authFieldHeight)
-            .zpSurface(showErrorHighlight ? .accent : .inset, radius: ZPTheme.radiusLarge, shadow: false)
+                .textFieldStyle(.plain)
+                .font(.callout.weight(.medium))
+                .autocorrectionDisabled()
+                .textContentType(.password)
+                .privacySensitive()
+                .focused($isPasswordFocused)
+                .onSubmit(onSubmit)
+                .accessibilityLabel("Master password")
+                .accessibilityHint("Enter the master password for this vault")
 
-            Toggle("Show Password", isOn: $showPassword)
+                Button {
+                    showPassword.toggle()
+                } label: {
+                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ZPTheme.accent)
+                        .frame(width: 24, height: 24)
+                }
+                .buttonStyle(.borderless)
                 .disabled(isBusy)
-                .accessibilityLabel("Show password")
-                .accessibilityHint("Reveals the characters in your master password field")
-                .toggleStyle(.checkbox)
+                .accessibilityLabel("Password visibility")
+                .accessibilityValue(showPassword ? "Visible" : "Hidden")
+                .accessibilityHint(showPassword ? "Hide the master password" : "Show the master password")
+            }
+            .padding(.horizontal, ZPTheme.spacing12)
+            .padding(.vertical, ZPTheme.spacing10)
+            .frame(minHeight: 40)
+            .zpSurface(.inset, radius: ZPTheme.radiusMedium, shadow: false)
+            .overlay(
+                RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
+                    .stroke(showErrorHighlight ? ZPTheme.destructive : Color.clear, lineWidth: 1.5)
+            )
 
             if capsLockOn {
                 Label("Caps Lock is on", systemImage: "capslock.fill")
-                    .font(.caption)
+                    .font(.caption2)
                     .foregroundStyle(ZPTheme.warning)
-            }
-
-            if canUseBiometrics {
-                VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
-                    Button {
-                        onUnlockWithBiometrics()
-                    } label: {
-                        Label("Use Touch ID", systemImage: "touchid")
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(isBusy)
-                    .accessibilityLabel("Unlock with Touch ID")
-
-                    Text("Use the saved biometric key for this vault.")
-                        .font(.caption)
-                        .foregroundStyle(ZPTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            } else if let biometricHelperText, !biometricHelperText.isEmpty {
-                Label(biometricHelperText, systemImage: "touchid")
-                    .font(.caption)
-                    .foregroundStyle(ZPTheme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityElement(children: .combine)
             }
         }
         .onAppear {

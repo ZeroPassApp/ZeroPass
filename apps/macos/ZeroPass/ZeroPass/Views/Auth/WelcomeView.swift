@@ -4,6 +4,9 @@ import SwiftUI
 struct WelcomeView: View {
     @EnvironmentObject var vault: VaultClient
     @State private var activeAuthModal: VaultClient.AuthModal?
+    @State private var isOpeningRecentVault = false
+
+    private let repositoryURL = URL(string: "https://github.com/ZeroPassApp/ZeroPass")!
 
     var body: some View {
         ZStack {
@@ -12,37 +15,49 @@ struct WelcomeView: View {
 
             backgroundMotifs
 
-            VStack(spacing: 0) {
-                Spacer(minLength: ZPTheme.spacing24)
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        topBar
 
-                VStack(alignment: .center, spacing: ZPTheme.spacing24) {
-                    brandHeader
+                        Spacer(minLength: ZPTheme.spacing24)
 
-                    if let errorText = vault.authFlowError, !errorText.isEmpty {
-                        AuthMessageView(
-                            text: errorText,
-                            systemImage: "exclamationmark.triangle.fill",
-                            tone: .error
+                        VStack(alignment: .center, spacing: ZPTheme.spacing24) {
+                            brandHeader
+
+                            if let errorText = vault.authFlowError, !errorText.isEmpty {
+                                AuthMessageView(
+                                    text: errorText,
+                                    systemImage: "exclamationmark.triangle.fill",
+                                    tone: .error
+                                )
+                            }
+
+                            actionButtons
+
+                            if let recentVaultURL {
+                                recentVaultSection(for: recentVaultURL)
+                            }
+
+                            assuranceRow
+                        }
+                        .frame(maxWidth: 520)
+                        .frame(maxWidth: .infinity)
+
+                        Spacer(minLength: ZPTheme.spacing24)
+
+                        footer
+                    }
+                    .frame(
+                        minHeight: max(
+                            proxy.size.height - (ZPTheme.spacing32 * 2),
+                            CGFloat.zero
                         )
-                    }
-
-                    actionButtons
-
-                    if let recentVaultURL {
-                        recentVaultSection(for: recentVaultURL)
-                    }
-
-                    assuranceRow
+                    )
+                    .padding(.horizontal, ZPTheme.spacing32)
+                    .padding(.vertical, ZPTheme.spacing32)
                 }
-                .frame(maxWidth: 460)
-                .frame(maxWidth: .infinity)
-
-                Spacer(minLength: ZPTheme.spacing24)
-
-                footer
             }
-            .padding(.horizontal, ZPTheme.spacing32)
-            .padding(.vertical, ZPTheme.spacing32)
         }
         .background(WelcomeWindowCommandObserver(activeAuthModal: $activeAuthModal))
         .focusedSceneValue(\.welcomeAuthModal, $activeAuthModal)
@@ -79,14 +94,14 @@ struct WelcomeView: View {
             Image(nsImage: NSApp.applicationIconImage)
                 .resizable()
                 .interpolation(.high)
-                .frame(width: 74, height: 74)
+                .frame(width: 68, height: 68)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .shadow(color: ZPTheme.accentGlow, radius: 18, y: 10)
+                .shadow(color: ZPTheme.accentGlow, radius: 14, y: 8)
                 .accessibilityHidden(true)
 
             VStack(alignment: .center, spacing: ZPTheme.spacing8) {
                 Text("ZeroPass")
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                    .font(.system(size: 40, weight: .bold, design: .rounded))
                     .foregroundStyle(ZPTheme.textPrimary)
 
                 Text("Local-first. Zero-knowledge. Total privacy.")
@@ -101,7 +116,7 @@ struct WelcomeView: View {
     }
 
     private var actionButtons: some View {
-        VStack(spacing: ZPTheme.spacing12) {
+        HStack(spacing: ZPTheme.spacing12) {
             Button {
                 vault.authFlowError = nil
                 activeAuthModal = .createVault
@@ -125,7 +140,7 @@ struct WelcomeView: View {
             .buttonStyle(.bordered)
             .accessibilityIdentifier("welcome.openVaultButton")
         }
-        .frame(maxWidth: 360)
+        .frame(maxWidth: 420)
     }
 
     @ViewBuilder
@@ -188,6 +203,7 @@ struct WelcomeView: View {
                 .zpSurface(.elevated)
             }
             .buttonStyle(.plain)
+            .disabled(isOpeningRecentVault)
         }
         .frame(maxWidth: 360, alignment: .leading)
     }
@@ -203,45 +219,64 @@ struct WelcomeView: View {
 
     private var footer: some View {
         HStack(spacing: ZPTheme.spacing12) {
-            footerItem(versionString.isEmpty ? "ZeroPass" : "ZeroPass \(versionString)")
+            footerText(versionString.isEmpty ? "ZeroPass" : "ZeroPass \(versionString)")
             footerBullet
-            footerItem("Secured offline")
+            footerText("Secured Offline")
             footerBullet
-            footerItem("Documentation")
+            footerLink("Documentation") { openDocumentation() }
             footerBullet
-            footerItem("Support")
+            footerLink("Support") { openSupport() }
             footerBullet
-            footerItem("Release Notes")
+            footerLink("Release Notes") { openReleaseNotes() }
         }
         .frame(maxWidth: .infinity, alignment: .center)
         .lineLimit(1)
         .minimumScaleFactor(0.8)
     }
 
+    private var topBar: some View {
+        HStack {
+            Spacer(minLength: 0)
+
+            HStack(spacing: ZPTheme.spacing8) {
+                chromeButton(
+                    systemImage: "questionmark.circle",
+                    label: "Documentation",
+                    action: openDocumentation
+                )
+
+                chromeButton(
+                    systemImage: "gearshape",
+                    label: "Settings",
+                    action: openSettings
+                )
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, ZPTheme.spacing16)
+    }
+
     private var recentVaultURL: URL? {
-        BookmarkStore().loadVaultURL()
+        let store = BookmarkStore()
+        guard let url = store.loadVaultURL() else { return nil }
+
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
+            store.clear()
+            return nil
+        }
+
+        return url
     }
 
     @ViewBuilder
     private var backgroundMotifs: some View {
         ZStack {
-            Image(systemName: "lock.fill")
-                .font(.system(size: 94, weight: .regular))
-                .foregroundStyle(ZPTheme.textMuted.opacity(0.10))
-                .offset(x: -300, y: 170)
-                .accessibilityHidden(true)
-
-            Image(systemName: "shield.fill")
-                .font(.system(size: 72, weight: .regular))
-                .foregroundStyle(ZPTheme.textMuted.opacity(0.08))
-                .offset(x: 310, y: -185)
-                .accessibilityHidden(true)
-
             RoundedRectangle(cornerRadius: 220, style: .continuous)
                 .fill(ZPTheme.accentGlow)
                 .frame(width: 480, height: 320)
-                .blur(radius: 90)
-                .offset(y: -180)
+                .blur(radius: 100)
+                .offset(y: -200)
                 .accessibilityHidden(true)
         }
     }
@@ -261,11 +296,38 @@ struct WelcomeView: View {
     }
 
     @ViewBuilder
-    private func footerItem(_ title: String) -> some View {
+    private func footerText(_ title: String) -> some View {
         Text(title.uppercased())
             .font(.system(size: 10, weight: .medium))
             .tracking(1.2)
             .foregroundStyle(ZPTheme.textTertiary)
+    }
+
+    @ViewBuilder
+    private func footerLink(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            footerText(title)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+    }
+
+    @ViewBuilder
+    private func chromeButton(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(ZPTheme.textSecondary)
+                .frame(width: 30, height: 28)
+                .background(ZPTheme.chipBackground, in: RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
+                        .stroke(ZPTheme.panelBorder, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .help(label)
+        .accessibilityLabel(label)
     }
 
     private var footerBullet: some View {
@@ -279,7 +341,7 @@ struct WelcomeView: View {
 
         if let values = try? url.resourceValues(forKeys: [.contentModificationDateKey]),
            let modifiedAt = values.contentModificationDate {
-            components.append("Updated \(modifiedAt.formatted(date: .abbreviated, time: .omitted))")
+            components.append("Modified: \(modifiedAt.formatted(date: .abbreviated, time: .omitted))")
         }
 
         if let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
@@ -295,10 +357,31 @@ struct WelcomeView: View {
         return components.joined(separator: " • ")
     }
 
+    private func openDocumentation() {
+        NSWorkspace.shared.open(repositoryURL.appending(path: "blob/main/README.md"))
+    }
+
+    private func openSupport() {
+        NSWorkspace.shared.open(repositoryURL.appending(path: "issues"))
+    }
+
+    private func openReleaseNotes() {
+        NSWorkspace.shared.open(repositoryURL.appending(path: "releases"))
+    }
+
+    private func openSettings() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    }
+
     private func openRecentVault(_ url: URL) {
+        guard !isOpeningRecentVault else { return }
+
+        isOpeningRecentVault = true
         vault.authFlowError = nil
 
         Task {
+            defer { isOpeningRecentVault = false }
+
             do {
                 try await vault.openVault(url)
             } catch {

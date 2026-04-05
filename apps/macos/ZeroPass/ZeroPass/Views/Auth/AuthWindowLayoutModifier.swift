@@ -116,12 +116,12 @@ private struct AuthWindowLayout: Equatable {
             idealContentSize = CGSize(width: 900, height: 620)
         case .locked:
             kind = .locked
-            minContentSize = CGSize(width: 560, height: 420)
-            idealContentSize = CGSize(width: 560, height: 440)
+            minContentSize = CGSize(width: 620, height: 500)
+            idealContentSize = CGSize(width: 680, height: 560)
         case .showingRecovery:
             kind = .showingRecovery
-            minContentSize = CGSize(width: 620, height: 480)
-            idealContentSize = CGSize(width: 640, height: 520)
+            minContentSize = CGSize(width: 620, height: 520)
+            idealContentSize = CGSize(width: 680, height: 580)
         case .unlocked:
             kind = .unlocked
             minContentSize = CGSize(width: 800, height: 500)
@@ -172,7 +172,14 @@ private struct AuthWindowLayout: Equatable {
             window.styleMask.insert(.fullSizeContentView)
         }
 
-        window.title = "ZeroPass"
+        switch kind {
+        case .locked:
+            window.title = "Unlock Vault"
+        case .showingRecovery:
+            window.title = "Recovery Phrase"
+        case .noVault, .unlocked:
+            window.title = "ZeroPass"
+        }
         window.titleVisibility = .visible
         window.titlebarAppearsTransparent = false
         window.isMovableByWindowBackground = false

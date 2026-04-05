@@ -9,8 +9,10 @@
 
 ## Overview
 - **Priority:** P1
-- **Status:** Pending
+- **Status:** In Progress
 - **Description:** Finish the redesign on the editor and in-app recovery utilities so creation/editing flows feel as premium and deliberate as browsing and unlocking.
+  - Item editor redesign: ✓ Implemented (2026-04-05) with compile fixes and automated validation passing; manual QA pending
+  - Recovery utilities: Pending
 
 ## Key Insights
 - `ItemEditorView.swift` is one of the biggest single UI files in the app and currently mixes structure, field rendering, password generation, and footer state in one place.
@@ -49,9 +51,9 @@
 5. Keep save/cancel behavior, field bindings, default-field logic, and validation untouched unless a visual change requires a tiny supporting cleanup.
 
 ## Todo List
-- [ ] Rework item editor hierarchy and spacing
-- [ ] Improve dynamic field rows and generator affordances
-- [ ] Bring password strength/generator UI into the shared visual language
+- [x] Rework item editor hierarchy and spacing (2026-04-05)
+- [x] Improve dynamic field rows and generator affordances (2026-04-05)
+- [ ] Bring password strength/generator UI into the shared visual language (requires manual QA)
 - [ ] Align in-app recovery regeneration sheet with auth recovery styling
 
 ## Success Criteria
