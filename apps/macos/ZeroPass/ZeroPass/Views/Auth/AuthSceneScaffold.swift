@@ -128,33 +128,42 @@ struct AuthSceneScaffold<Accessory: View, Content: View, Footer: View>: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: ZPTheme.spacing24) {
-                header
-                content
-                footer
+        ZStack(alignment: .topLeading) {
+            ZPTheme.authSceneBackground
+                .ignoresSafeArea()
+
+            Circle()
+                .fill(ZPTheme.authSceneAccent)
+                .frame(width: 320, height: 320)
+                .blur(radius: 60)
+                .offset(x: -70, y: -150)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: ZPTheme.spacing28) {
+                    header
+                    content
+                    footer
+                }
+                .frame(maxWidth: ZPTheme.authPanelMaxWidth, alignment: .leading)
+                .padding(.horizontal, ZPTheme.spacing32)
+                .padding(.vertical, ZPTheme.spacing32)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: ZPTheme.authPanelMaxWidth, alignment: .leading)
-            .padding(.horizontal, ZPTheme.spacing32)
-            .padding(.vertical, ZPTheme.spacing24)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .background(ZPTheme.authSceneBackground)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+        VStack(alignment: .leading, spacing: ZPTheme.spacing12) {
             HStack(alignment: .top, spacing: ZPTheme.spacing16) {
                 HStack(alignment: .firstTextBaseline, spacing: ZPTheme.spacing10) {
                     Image(systemName: symbolName)
-                        .font(.title3.weight(.semibold))
+                        .font(.title2.weight(.semibold))
                         .foregroundStyle(symbolTint)
                         .accessibilityHidden(true)
 
                     Text(title)
-                        .font(.title)
-                        .fontWeight(.semibold)
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundStyle(ZPTheme.textPrimary)
                 }
 
@@ -169,20 +178,24 @@ struct AuthSceneScaffold<Accessory: View, Content: View, Footer: View>: View {
             }
 
             if let detail, !detail.isEmpty {
-                if let detailSymbolName, !detailSymbolName.isEmpty {
-                    Label(detail, systemImage: detailSymbolName)
-                        .font(.footnote)
-                        .foregroundStyle(ZPTheme.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .labelStyle(.titleAndIcon)
-                } else {
-                    Text(detail)
-                        .font(.footnote)
-                        .foregroundStyle(ZPTheme.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                Group {
+                    if let detailSymbolName, !detailSymbolName.isEmpty {
+                        Label(detail, systemImage: detailSymbolName)
+                    } else {
+                        Label(detail, systemImage: "info.circle")
+                    }
                 }
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(ZPTheme.textSecondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.horizontal, ZPTheme.spacing10)
+                .padding(.vertical, ZPTheme.spacing8)
+                .background(ZPTheme.pillBackground, in: Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(ZPTheme.pillBorder.opacity(0.72), lineWidth: 1)
+                )
             }
         }
     }

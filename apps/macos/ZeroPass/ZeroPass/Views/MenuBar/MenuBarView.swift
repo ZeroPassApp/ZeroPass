@@ -19,62 +19,78 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Header
-            HStack(spacing: 6) {
-                Image(systemName: vault.isUnlocked ? "lock.open.fill" : "lock.fill")
-                    .foregroundStyle(vault.isUnlocked ? .green : .secondary)
-                    .font(.system(size: 11))
+            HStack(spacing: ZPTheme.spacing8) {
+                ZStack {
+                    Circle()
+                        .fill((vault.isUnlocked ? ZPTheme.success : ZPTheme.textMuted).opacity(0.18))
 
-                Text(vault.isUnlocked ? "Unlocked" : "Locked")
-                    .font(.system(size: 11, weight: .semibold))
+                    Image(systemName: vault.isUnlocked ? "lock.open.fill" : "lock.fill")
+                        .foregroundStyle(vault.isUnlocked ? ZPTheme.success : ZPTheme.textSecondary)
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .frame(width: 24, height: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(vault.vaultName)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ZPTheme.textPrimary)
+
+                    Text(vault.isUnlocked ? "Unlocked" : "Locked")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(ZPTheme.textSecondary)
+                }
 
                 Spacer()
 
                 Button {
                     NSApp.activate(ignoringOtherApps: true)
                 } label: {
-                    Label("Open", systemImage: "macwindow")
-                        .font(.system(size: 11))
+                    Image(systemName: "macwindow")
+                        .font(.system(size: 11, weight: .semibold))
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel("Open main window")
             }
+            .padding(.horizontal, ZPTheme.spacing12)
+            .padding(.vertical, ZPTheme.spacing10)
+            .zpSurface(.muted, radius: ZPTheme.radiusLarge, shadow: false)
 
             Divider()
 
             if vault.isUnlocked {
-                // Quick Search button - prominent
                 Button {
                     quickSearch.toggle(vault: vault)
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: ZPTheme.spacing8) {
                         Image(systemName: "magnifyingglass")
                         Text("Quick Search")
                         Spacer()
                         Text("⌘K")
                             .font(.system(size: 10))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(ZPTheme.textTertiary)
                     }
-                    .font(.system(size: 12))
-                    .padding(.vertical, 4)
-                    .padding(.horizontal, 8)
-                    .background(.quaternary)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(ZPTheme.textPrimary)
+                    .padding(.vertical, ZPTheme.spacing10)
+                    .padding(.horizontal, ZPTheme.spacing12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .zpSurface(.accent, radius: ZPTheme.radiusLarge, shadow: false)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Quick Search, Command K")
 
-                // Search field
                 TextField("Filter items…", text: $query)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(size: 12))
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, weight: .medium))
+                    .padding(.horizontal, ZPTheme.spacing12)
+                    .padding(.vertical, ZPTheme.spacing10)
+                    .zpSurface(.inset, radius: ZPTheme.radiusLarge, shadow: false)
 
-                // Items list
                 if items.isEmpty {
                     Text("No items found")
                         .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .padding(.vertical, 4)
+                        .foregroundStyle(ZPTheme.textSecondary)
+                        .padding(.vertical, ZPTheme.spacing8)
                 } else {
                     ForEach(items) { item in
                         MenuBarItemRow(item: item, onCopyUsername: {
@@ -87,14 +103,13 @@ struct MenuBarView: View {
 
                 Divider()
 
-                // Footer actions
                 HStack {
                     Spacer()
                     Button {
                         Task { await vault.lock() }
                     } label: {
                         Label("Lock", systemImage: "lock")
-                            .font(.system(size: 11))
+                            .font(.system(size: 11, weight: .semibold))
                     }
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Lock vault")
@@ -102,7 +117,7 @@ struct MenuBarView: View {
             } else {
                 Text("Unlock to view items")
                     .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ZPTheme.textSecondary)
                     .padding(.vertical, 8)
 
                 HStack {
@@ -118,20 +133,19 @@ struct MenuBarView: View {
             }
         }
         .padding(12)
-        .frame(width: 300)
+        .frame(width: 320)
+        .background(ZPTheme.workspaceBackground)
     }
 
     private func copyUsername(_ item: VaultItem) {
-        let candidates = ["username", "email", "user", "login", "cardholder", "full_name"]
-        guard let value = candidates.compactMap({ item.fields[$0] }).first(where: { !$0.isEmpty }) else { return }
+        guard let value = item.preferredIdentityField?.value else { return }
 
         let secs = (vault.clipboardAutoClearEnabled ? vault.clipboardAutoClearSeconds : 0)
         ClipboardService.shared.copySensitive(value, clearAfterSeconds: secs)
     }
 
     private func copySecret(_ item: VaultItem) {
-        let candidates = ["password", "api_secret", "secret", "api_key", "private_key", "cvv"]
-        guard let value = candidates.compactMap({ item.fields[$0] }).first(where: { !$0.isEmpty }) else { return }
+        guard let value = item.preferredSecretField?.value else { return }
 
         let secs = (vault.clipboardAutoClearEnabled ? vault.clipboardAutoClearSeconds : 0)
         ClipboardService.shared.copySensitive(value, clearAfterSeconds: secs)
@@ -144,14 +158,20 @@ private struct MenuBarItemRow: View {
     let onCopySecret: () -> Void
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: item.type.symbolName)
-                .foregroundStyle(item.type.color)
-                .font(.system(size: 11))
-                .frame(width: 16)
+        HStack(spacing: ZPTheme.spacing10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(item.type.color.opacity(0.12))
+
+                Image(systemName: item.type.symbolName)
+                    .foregroundStyle(item.type.color)
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .frame(width: 24, height: 24)
 
             Text(item.name.isEmpty ? "(Untitled)" : item.name)
-                .font(.system(size: 12))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(ZPTheme.textPrimary)
                 .lineLimit(1)
 
             Spacer()
@@ -163,6 +183,7 @@ private struct MenuBarItemRow: View {
                     .font(.system(size: 10))
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Copy username")
             .help("Copy username")
 
             Button {
@@ -172,10 +193,12 @@ private struct MenuBarItemRow: View {
                     .font(.system(size: 10))
             }
             .buttonStyle(.borderless)
+            .accessibilityLabel("Copy secret")
             .help("Copy secret")
         }
-        .padding(.vertical, 3)
-        .padding(.horizontal, 4)
+        .padding(.vertical, ZPTheme.spacing8)
+        .padding(.horizontal, ZPTheme.spacing10)
+        .zpSurface(.card, radius: ZPTheme.radiusLarge, shadow: false)
         .contentShape(Rectangle())
     }
 }

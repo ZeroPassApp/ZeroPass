@@ -17,93 +17,101 @@ struct SecuritySettingsView: View {
     @State private var csvExportConfirmText: String = ""
 
     var body: some View {
-        Form {
-            Section("Auto-lock") {
-                Stepper(value: $vault.autoLockTimeoutSeconds, in: 0...3600, step: 60) {
-                    if vault.autoLockTimeoutSeconds == 0 {
-                        Text("Auto-lock: Never")
-                    } else {
-                        Text("Auto-lock after \(vault.autoLockTimeoutSeconds / 60)m")
+        VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+            settingsIntro(
+                title: "Security",
+                message: "Tune lock behavior, clipboard protection, Touch ID, and recovery/export safety controls."
+            )
+
+            Form {
+                Section("Auto-lock") {
+                    Stepper(value: $vault.autoLockTimeoutSeconds, in: 0...3600, step: 60) {
+                        if vault.autoLockTimeoutSeconds == 0 {
+                            Text("Auto-lock: Never")
+                        } else {
+                            Text("Auto-lock after \(vault.autoLockTimeoutSeconds / 60)m")
+                        }
                     }
+
+                    Toggle("Lock on sleep", isOn: $vault.lockOnSleepEnabled)
+                    Toggle("Lock on screen sleep", isOn: $vault.lockOnScreenSleepEnabled)
                 }
 
-                Toggle("Lock on sleep", isOn: $vault.lockOnSleepEnabled)
-                Toggle("Lock on screen sleep", isOn: $vault.lockOnScreenSleepEnabled)
-            }
+                Section("Clipboard") {
+                    Toggle("Auto-clear clipboard", isOn: $vault.clipboardAutoClearEnabled)
 
-            Section("Clipboard") {
-                Toggle("Auto-clear clipboard", isOn: $vault.clipboardAutoClearEnabled)
-
-                Stepper(value: $vault.clipboardAutoClearSeconds, in: 5...300, step: 5) {
-                    Text("Clear clipboard after \(vault.clipboardAutoClearSeconds)s")
+                    Stepper(value: $vault.clipboardAutoClearSeconds, in: 5...300, step: 5) {
+                        Text("Clear clipboard after \(vault.clipboardAutoClearSeconds)s")
+                    }
+                    .disabled(!vault.clipboardAutoClearEnabled)
                 }
-                .disabled(!vault.clipboardAutoClearEnabled)
-            }
 
-            Section("Biometrics") {
-                Toggle("Enable Touch ID unlock", isOn: $vault.biometricUnlockEnabled)
-                    .disabled(!vault.isBiometricAvailable)
-            }
-
-            Section("Master Password") {
-                Button("Change master password…") {
-                    showingChangePassword = true
+                Section("Biometrics") {
+                    Toggle("Enable Touch ID unlock", isOn: $vault.biometricUnlockEnabled)
+                        .disabled(!vault.isBiometricAvailable)
                 }
-                .disabled(!vault.hasVault)
-            }
 
-            Section("Recovery Phrase") {
-                Button("Regenerate recovery phrase…") {
-                    showingRecoveryConfirm = true
+                Section("Master Password") {
+                    Button("Change master password…") {
+                        showingChangePassword = true
+                    }
+                    .disabled(!vault.hasVault)
                 }
-                .disabled(!vault.isUnlocked)
 
-                Text("Recovery phrase is shown only during creation or regeneration and is never stored.")
-                    .foregroundStyle(.secondary)
-                    .font(.system(size: 12))
-            }
-
-            Section("Data") {
-                HStack {
-                    Button("Export Encrypted…") {
-                        exportEncrypted()
+                Section("Recovery Phrase") {
+                    Button("Regenerate recovery phrase…") {
+                        showingRecoveryConfirm = true
                     }
                     .disabled(!vault.isUnlocked)
 
-                    Button("Export JSON…") {
-                        showingExportConfirm = true
-                    }
-                    .disabled(!vault.isUnlocked)
+                    Text("Recovery phrase is shown only during creation or regeneration and is never stored.")
+                        .foregroundStyle(ZPTheme.textSecondary)
+                        .font(.system(size: 12))
+                }
 
-                    Button("Export CSV…") {
-                        showingCSVExportConfirm = true
+                Section("Data") {
+                    HStack {
+                        Button("Export Encrypted…") {
+                            exportEncrypted()
+                        }
+                        .disabled(!vault.isUnlocked)
+
+                        Button("Export JSON…") {
+                            showingExportConfirm = true
+                        }
+                        .disabled(!vault.isUnlocked)
+
+                        Button("Export CSV…") {
+                            showingCSVExportConfirm = true
+                        }
+                        .disabled(!vault.isUnlocked)
+                    }
+
+                    Menu("Import from…") {
+                        Button("Chrome CSV…") { importFrom(.chrome) }
+                        Button("Firefox CSV…") { importFrom(.firefox) }
+                        Button("Safari CSV…") { importFrom(.safari) }
+                        Divider()
+                        Button("1Password CSV…") { importFrom(.onePassword) }
+                        Button("1Password 1PUX…") { importFrom(.onePasswordPUX) }
+                        Button("Bitwarden…") { importFrom(.bitwarden) }
+                        Button("LastPass CSV…") { importFrom(.lastPass) }
+                        Button("KeePass CSV…") { importFrom(.keepass) }
+                        Divider()
+                        Button("Generic CSV…") { importFrom(.csv) }
                     }
                     .disabled(!vault.isUnlocked)
                 }
 
-                Menu("Import from…") {
-                    Button("Chrome CSV…") { importFrom(.chrome) }
-                    Button("Firefox CSV…") { importFrom(.firefox) }
-                    Button("Safari CSV…") { importFrom(.safari) }
-                    Divider()
-                    Button("1Password CSV…") { importFrom(.onePassword) }
-                    Button("1Password 1PUX…") { importFrom(.onePasswordPUX) }
-                    Button("Bitwarden…") { importFrom(.bitwarden) }
-                    Button("LastPass CSV…") { importFrom(.lastPass) }
-                    Button("KeePass CSV…") { importFrom(.keepass) }
-                    Divider()
-                    Button("Generic CSV…") { importFrom(.csv) }
+                if let err = vault.lastError {
+                    Text(err)
+                        .foregroundStyle(ZPTheme.destructive)
+                        .textSelection(.enabled)
                 }
-                .disabled(!vault.isUnlocked)
             }
-
-            if let err = vault.lastError {
-                Text(err)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            }
+            .formStyle(.grouped)
         }
-        .formStyle(.grouped)
+        .background(ZPTheme.workspaceBackground)
         .sheet(isPresented: $showingChangePassword) {
             ChangePasswordSheet()
                 .environmentObject(vault)
@@ -150,6 +158,21 @@ struct SecuritySettingsView: View {
         } message: {
             Text("Exported CSV is unencrypted. Anyone with the file can read your secrets.")
         }
+    }
+
+    @ViewBuilder
+    private func settingsIntro(title: String, message: String) -> some View {
+        VStack(alignment: .leading, spacing: ZPTheme.spacing6) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(ZPTheme.textPrimary)
+
+            Text(message)
+                .font(.callout)
+                .foregroundStyle(ZPTheme.textSecondary)
+        }
+        .padding(ZPTheme.spacing18)
+        .zpSurface(.muted)
     }
 
     private func exportEncrypted() {
@@ -269,6 +292,7 @@ private struct ChangePasswordSheet: View {
             }
         }
         .padding(20)
+        .background(ZPTheme.workspaceBackground)
         .onChange(of: newPassword) { _, newValue in
             updateStrengthSummary(for: newValue)
         }
@@ -349,6 +373,7 @@ private struct RecoveryMnemonicSheet: View {
             }
         }
         .padding(20)
+        .background(ZPTheme.workspaceBackground)
         .frame(width: 560)
     }
 }

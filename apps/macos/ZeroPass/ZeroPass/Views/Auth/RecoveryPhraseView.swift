@@ -23,6 +23,11 @@ struct RecoveryPhraseView: View {
 
                 RecoveryPhraseCardView(mnemonic: mnemonic)
 
+                Text("A paper backup is safest. If you copy this phrase digitally, ensure the destination is encrypted and offline.")
+                    .font(.footnote)
+                    .foregroundStyle(ZPTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 HStack(spacing: ZPTheme.spacing12) {
                     Button {
                         let secs = vault.clipboardAutoClearEnabled ? vault.clipboardAutoClearSeconds : 0

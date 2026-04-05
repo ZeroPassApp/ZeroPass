@@ -15,10 +15,11 @@ struct HotkeyRecorderView: View {
             Text("Record Quick Search Hotkey")
                 .font(.title3)
                 .bold()
+                .foregroundStyle(ZPTheme.textPrimary)
 
             Text(lastCaptured)
                 .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ZPTheme.textSecondary)
 
             HotkeyCaptureView { kc, mods in
                 keyCode = kc
@@ -29,6 +30,10 @@ struct HotkeyRecorderView: View {
             .frame(height: 60)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(ZPTheme.panelBorderStrong, lineWidth: 1)
+            )
 
             HStack {
                 Spacer()
@@ -36,6 +41,7 @@ struct HotkeyRecorderView: View {
             }
         }
         .padding(16)
+        .background(ZPTheme.workspaceBackground)
     }
 
     static func displayString(keyCode: Int, modifiers: Int) -> String {
@@ -88,7 +94,10 @@ private struct HotkeyCaptureView: NSViewRepresentable {
     func makeNSView(context: Context) -> CaptureNSView {
         let v = CaptureNSView()
         v.onCapture = onCapture
-        DispatchQueue.main.async { v.window?.makeFirstResponder(v) }
+        DispatchQueue.main.async {
+            v.window?.makeFirstResponder(v)
+            _ = v.becomeFirstResponder()
+        }
         return v
     }
 

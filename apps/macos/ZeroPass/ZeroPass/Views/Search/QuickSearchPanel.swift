@@ -3,7 +3,7 @@ import AppKit
 final class QuickSearchPanel: NSPanel {
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 580, height: 400),
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 440),
             styleMask: [.titled, .fullSizeContentView, .utilityWindow],
             backing: .buffered,
             defer: false
@@ -17,6 +17,7 @@ final class QuickSearchPanel: NSPanel {
         collectionBehavior = [.transient, .moveToActiveSpace]
         isOpaque = false
         backgroundColor = .clear
+        hasShadow = true
 
         hidesOnDeactivate = true
     }

@@ -79,15 +79,15 @@ struct ItemDetailView: View {
     }
 
     private var primaryIdentityField: (key: String, value: String)? {
-        firstNonEmptyField(in: ["username", "email", "user", "login", "full_name", "cardholder", "relying_party"])
+        item.preferredIdentityField
     }
 
     private var primarySecretField: (key: String, value: String)? {
-        firstNonEmptyField(in: ["password", "api_key", "api_secret", "secret", "private_key", "card_number", "credential_id", "cvv", "passphrase"])
+        item.preferredSecretField
     }
 
     private var primaryURLField: (key: String, value: String)? {
-        firstNonEmptyField(in: ["url", "endpoint"])
+        item.preferredURLField
     }
 
     private var hasQuickActions: Bool {
@@ -114,81 +114,73 @@ struct ItemDetailView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
                 summaryView
-            }
 
-            if hasQuickActions {
-                Section("Quick Actions") {
-                    quickActionsView
-                }
-            }
-
-            if !primaryFieldKeys.isEmpty {
-                Section(primarySectionTitle) {
-                    ForEach(primaryFieldKeys, id: \.self) { key in
-                        fieldRow(key: key, value: item.fields[key] ?? "")
+                if hasQuickActions {
+                    detailSection("Quick Actions") {
+                        quickActionsView
                     }
                 }
-            }
 
-            if !additionalFieldKeys.isEmpty {
-                Section("Additional Fields") {
-                    ForEach(additionalFieldKeys, id: \.self) { key in
-                        fieldRow(key: key, value: item.fields[key] ?? "")
+                if !primaryFieldKeys.isEmpty {
+                    fieldSection(title: primarySectionTitle, keys: primaryFieldKeys)
+                }
+
+                if !additionalFieldKeys.isEmpty {
+                    fieldSection(title: "Additional Fields", keys: additionalFieldKeys)
+                }
+
+                if !item.notes.isEmpty {
+                    detailSection("Notes") {
+                        Text(item.notes)
+                            .font(.body)
+                            .foregroundStyle(ZPTheme.textPrimary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
-            }
 
-            if !item.notes.isEmpty {
-                Section("Notes") {
-                    Text(item.notes)
-                        .font(.body)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-
-            if !item.tags.isEmpty {
-                Section("Tags") {
-                    FlowLayout(spacing: 6) {
-                        ForEach(item.tags, id: \.self) { tag in
-                            Text(tag)
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(.quaternary)
-                                .clipShape(Capsule())
+                if !item.tags.isEmpty {
+                    detailSection("Tags") {
+                        FlowLayout(spacing: 8) {
+                            ForEach(item.tags, id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(ZPTheme.textSecondary)
+                                    .padding(.horizontal, ZPTheme.spacing10)
+                                    .padding(.vertical, ZPTheme.spacing6)
+                                    .background(ZPTheme.chipBackground, in: Capsule())
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(ZPTheme.panelBorder, lineWidth: 1)
+                                    )
+                            }
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 2)
-                }
-            }
-
-            Section("Details") {
-                LabeledContent("Modified") {
-                    Text(item.updatedAt.formatted(date: .abbreviated, time: .shortened))
-                        .foregroundStyle(.secondary)
-                }
-                LabeledContent("Created") {
-                    Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
-                        .foregroundStyle(.secondary)
-                }
-                LabeledContent("Version") {
-                    Text("v\(item.version)")
-                        .foregroundStyle(.secondary)
                 }
 
-                Button {
-                    loadVersionsAndShow()
-                } label: {
-                    Label("Version History", systemImage: "clock.arrow.circlepath")
+                detailSection("Details") {
+                    detailMetaRow(title: "Modified", value: item.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                    Divider()
+                    detailMetaRow(title: "Created", value: item.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    Divider()
+                    detailMetaRow(title: "Version", value: "v\(item.version)")
+                    Divider()
+                    Button {
+                        loadVersionsAndShow()
+                    } label: {
+                        Label("Version History", systemImage: "clock.arrow.circlepath")
+                    }
+                    .buttonStyle(.bordered)
                 }
             }
+            .padding(ZPTheme.spacing24)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .formStyle(.grouped)
+        .background(ZPTheme.workspaceBackground)
         .toolbar {
             ToolbarItemGroup {
                 Button {
@@ -250,38 +242,54 @@ struct ItemDetailView: View {
     }
 
     private var summaryView: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: item.type.symbolName)
-                .font(.title2)
-                .foregroundStyle(item.type.color)
-                .frame(width: 28)
+        HStack(alignment: .top, spacing: ZPTheme.spacing16) {
+            ZStack {
+                RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                    .fill(item.type.color.opacity(0.14))
 
-            VStack(alignment: .leading, spacing: 4) {
+                Image(systemName: item.type.symbolName)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(item.type.color)
+            }
+            .frame(width: 48, height: 48)
+
+            VStack(alignment: .leading, spacing: ZPTheme.spacing6) {
                 Text(item.name.isEmpty ? "(Untitled)" : item.name)
                     .font(.title2.weight(.semibold))
+                    .foregroundStyle(ZPTheme.textPrimary)
 
-                Text(item.type.displayName)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: ZPTheme.spacing8) {
+                    Text(item.type.displayName)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(ZPTheme.accent)
+                        .padding(.horizontal, ZPTheme.spacing10)
+                        .padding(.vertical, ZPTheme.spacing6)
+                        .background(ZPTheme.pillBackground, in: Capsule())
+                        .overlay(
+                            Capsule()
+                                .stroke(ZPTheme.pillBorder, lineWidth: 1)
+                        )
+
+                    if item.favorite {
+                        Label("Favorite", systemImage: "star.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.yellow)
+                    }
+                }
 
                 if let summarySubtitle {
                     Text(summarySubtitle)
                         .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(ZPTheme.textSecondary)
                         .lineLimit(1)
                         .textSelection(.enabled)
                 }
             }
 
             Spacer()
-
-            if item.favorite {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                    .accessibilityLabel("Favorite")
-            }
         }
-        .padding(.vertical, 4)
+        .padding(ZPTheme.spacing20)
+        .zpSurface(.elevated)
     }
 
     private var quickActionsView: some View {
@@ -324,23 +332,29 @@ struct ItemDetailView: View {
         let isCopied = copiedFieldKey == key
         let title = fieldTitle(for: key)
 
-        LabeledContent(title) {
-            HStack(spacing: 8) {
-                if isSensitive && !isRevealed {
-                    Text("●●●●●●●●●●●●")
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .accessibilityLabel(title)
-                        .accessibilityValue("Hidden")
-                } else {
-                    Text(value)
-                        .font(isSensitive ? .system(.body, design: .monospaced) : .body)
-                        .textSelection(.enabled)
-                        .accessibilityLabel(title)
-                        .accessibilityValue(value)
-                }
+        VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+            Text(title.uppercased())
+                .font(.caption.weight(.bold))
+                .foregroundStyle(ZPTheme.textTertiary)
 
-                Spacer()
+            HStack(spacing: ZPTheme.spacing12) {
+                Group {
+                    if isSensitive && !isRevealed {
+                        Text("●●●●●●●●●●●●")
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(ZPTheme.textSecondary)
+                            .accessibilityLabel(title)
+                            .accessibilityValue("Hidden")
+                    } else {
+                        Text(value)
+                            .font(isSensitive ? .system(.body, design: .monospaced) : .body)
+                            .foregroundStyle(ZPTheme.textPrimary)
+                            .textSelection(.enabled)
+                            .accessibilityLabel(title)
+                            .accessibilityValue(value)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 HStack(spacing: 4) {
                     if isSensitive {
@@ -361,8 +375,8 @@ struct ItemDetailView: View {
                     Button {
                         copyField(key: key, value: value)
                     } label: {
-                        Image(systemName: isCopied ? "checkmark" : "doc.on.doc")
-                            .foregroundStyle(isCopied ? .green : .secondary)
+                        Image(systemName: isCopied ? "checkmark.circle.fill" : "doc.on.doc")
+                            .foregroundStyle(isCopied ? ZPTheme.success : ZPTheme.textSecondary)
                     }
                     .buttonStyle(.borderless)
                     .help("Copy \(title)")
@@ -371,6 +385,7 @@ struct ItemDetailView: View {
                 }
             }
         }
+        .padding(.vertical, ZPTheme.spacing10)
     }
 
     @ViewBuilder
@@ -435,6 +450,48 @@ struct ItemDetailView: View {
 
         guard let url = URL(string: normalizedValue) else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    @ViewBuilder
+    private func detailSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: ZPTheme.spacing14) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(ZPTheme.textPrimary)
+
+            content()
+        }
+        .padding(ZPTheme.spacing18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .zpSurface(.card)
+    }
+
+    @ViewBuilder
+    private func fieldSection(title: String, keys: [String]) -> some View {
+        detailSection(title) {
+            VStack(spacing: 0) {
+                ForEach(Array(keys.enumerated()), id: \.element) { index, key in
+                    fieldRow(key: key, value: item.fields[key] ?? "")
+
+                    if index < keys.count - 1 {
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func detailMetaRow(title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(ZPTheme.textSecondary)
+
+            Spacer()
+
+            Text(value)
+                .foregroundStyle(ZPTheme.textPrimary)
+        }
     }
 
     private func loadVersionsAndShow() {

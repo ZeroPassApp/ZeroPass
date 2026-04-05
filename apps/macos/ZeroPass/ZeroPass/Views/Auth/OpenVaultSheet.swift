@@ -30,14 +30,29 @@ struct OpenVaultSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZPTheme.spacing20) {
-            Text(mode.title)
-                .font(.title2)
-                .fontWeight(.semibold)
-                .accessibilityIdentifier(mode == .openExisting ? "openVault.title" : "replaceVault.title")
+            HStack(alignment: .center, spacing: ZPTheme.spacing12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                        .fill(ZPTheme.accentSoft)
 
-            Text(descriptionText)
-                .foregroundStyle(ZPTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: mode == .openExisting ? "folder" : "arrow.triangle.2.circlepath")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(ZPTheme.accent)
+                }
+                .frame(width: 42, height: 42)
+
+                VStack(alignment: .leading, spacing: ZPTheme.spacing4) {
+                    Text(mode.title)
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(ZPTheme.textPrimary)
+                        .accessibilityIdentifier(mode == .openExisting ? "openVault.title" : "replaceVault.title")
+
+                    Text(descriptionText)
+                        .foregroundStyle(ZPTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             if let localError, !localError.isEmpty {
                 AuthMessageView(
@@ -46,6 +61,18 @@ struct OpenVaultSheet: View {
                     tone: .error
                 )
             }
+
+            VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+                Text("Vault folders can be opened directly from any accessible location on this Mac.")
+                    .font(.callout)
+                    .foregroundStyle(ZPTheme.textSecondary)
+
+                Text("If a vault cannot be opened, your current state stays unchanged.")
+                    .font(.caption)
+                    .foregroundStyle(ZPTheme.textTertiary)
+            }
+            .padding(ZPTheme.spacing18)
+            .zpSurface(.muted)
 
             HStack {
                 Button("Cancel") {
@@ -74,6 +101,7 @@ struct OpenVaultSheet: View {
             }
         }
         .padding(ZPTheme.spacing24)
+        .background(ZPTheme.workspaceBackground)
         .frame(minWidth: ZPTheme.authSheetWidth, idealWidth: ZPTheme.authSheetWidth)
     }
 

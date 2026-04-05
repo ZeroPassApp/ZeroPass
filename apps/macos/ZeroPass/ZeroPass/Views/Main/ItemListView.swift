@@ -97,6 +97,9 @@ struct ItemListView: View {
                     ForEach(filteredItems) { item in
                         ItemRow(item: item)
                             .tag(item.id)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+                            .listRowBackground(Color.clear)
                             .accessibilityLabel("\(item.name), \(item.type.displayName)")
                             .accessibilityHint("Select to view details")
                             .contextMenu {
@@ -104,6 +107,9 @@ struct ItemListView: View {
                             }
                     }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(ZPTheme.panelBackgroundMuted)
             }
         }
         .navigationTitle(categoryTitle)
@@ -128,7 +134,7 @@ struct ItemListView: View {
                         }
                     }
                 } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                    Label("Sort", systemImage: "arrow.up.arrow.down.circle")
                 }
                 .help("Sort items")
                 .accessibilityLabel("Sort items")
@@ -261,25 +267,15 @@ struct ItemListView: View {
     }
 
     private func copyableIdentityField(for item: VaultItem) -> (key: String, value: String)? {
-        firstNonEmptyField(in: item, keys: ["username", "email", "user", "login", "cardholder", "full_name", "relying_party"])
+        item.preferredIdentityField
     }
 
     private func copyableSecretField(for item: VaultItem) -> (key: String, value: String)? {
-        firstNonEmptyField(in: item, keys: ["password", "api_secret", "secret", "api_key", "private_key", "cvv", "card_number", "credential_id", "passphrase"])
+        item.preferredSecretField
     }
 
     private func primaryURLField(for item: VaultItem) -> (key: String, value: String)? {
-        firstNonEmptyField(in: item, keys: ["url", "endpoint"])
-    }
-
-    private func firstNonEmptyField(in item: VaultItem, keys: [String]) -> (key: String, value: String)? {
-        for key in keys {
-            let value = item.fields[key, default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
-            if !value.isEmpty {
-                return (key, value)
-            }
-        }
-        return nil
+        item.preferredURLField
     }
 
     private func copyFieldValue(_ value: String) {
@@ -329,32 +325,50 @@ private struct ItemRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: item.type.symbolName)
-                .font(.body)
-                .frame(width: 20)
+        HStack(spacing: ZPTheme.spacing12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
+                    .fill(item.type.color.opacity(0.12))
 
-            VStack(alignment: .leading, spacing: 2) {
+                Image(systemName: item.type.symbolName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(item.type.color)
+            }
+            .frame(width: 30, height: 30)
+
+            VStack(alignment: .leading, spacing: ZPTheme.spacing4) {
                 Text(item.name.isEmpty ? "(Untitled)" : item.name)
-                    .font(.body.weight(.medium))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(ZPTheme.textPrimary)
                     .lineLimit(1)
 
                 if !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(ZPTheme.textSecondary)
                         .lineLimit(1)
                 }
             }
 
             Spacer()
 
-            if item.favorite {
-                Image(systemName: "star.fill")
-                    .foregroundStyle(.yellow)
-                    .font(.caption)
+            VStack(alignment: .trailing, spacing: ZPTheme.spacing4) {
+                Text(item.type.displayName.uppercased())
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(ZPTheme.textSecondary)
+                    .padding(.horizontal, ZPTheme.spacing8)
+                    .padding(.vertical, ZPTheme.spacing4)
+                    .background(ZPTheme.chipBackground, in: Capsule())
+
+                if item.favorite {
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.yellow)
+                        .font(.caption)
+                }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, ZPTheme.spacing12)
+        .padding(.vertical, ZPTheme.spacing10)
+        .zpSurface(.card, radius: ZPTheme.radiusLarge, shadow: false)
     }
 }

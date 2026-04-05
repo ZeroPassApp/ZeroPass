@@ -13,23 +13,30 @@ struct AboutView: View {
         VStack(spacing: 16) {
             Spacer()
 
-            Image(systemName: "lock.shield.fill")
-                .font(.system(size: 48))
-                .foregroundStyle(.tint)
+            ZStack {
+                RoundedRectangle(cornerRadius: ZPTheme.radiusXLarge, style: .continuous)
+                    .fill(ZPTheme.accentSoft)
+
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(ZPTheme.accent)
+            }
+            .frame(width: 88, height: 88)
 
             VStack(spacing: 4) {
                 Text("ZeroPass")
                     .font(.title)
                     .bold()
+                    .foregroundStyle(ZPTheme.textPrimary)
 
                 Text("Version \(versionString)")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(ZPTheme.textSecondary)
             }
 
             Text("A zero-knowledge, local-first credential manager.\nPowered by a Go core with a native SwiftUI interface.")
                 .font(.callout)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(ZPTheme.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -42,12 +49,13 @@ struct AboutView: View {
 
                 Text("macOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(ZPTheme.textTertiary)
             }
 
             Spacer()
         }
         .frame(maxWidth: .infinity)
         .padding(20)
+        .background(ZPTheme.workspaceBackground)
     }
 }

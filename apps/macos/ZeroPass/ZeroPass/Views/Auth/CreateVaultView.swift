@@ -19,64 +19,95 @@ struct CreateVaultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ZPTheme.spacing20) {
-            Text("Create Vault")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .accessibilityIdentifier("createVault.title")
+            HStack(alignment: .center, spacing: ZPTheme.spacing12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                        .fill(ZPTheme.accentSoft)
 
-            Text("Choose a folder and set the master password you’ll use to unlock this vault.")
-                .foregroundStyle(ZPTheme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+                    Image(systemName: "lock.shield")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(ZPTheme.accent)
+                }
+                .frame(width: 42, height: 42)
 
-            VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
-                Text("Vault Location")
-                    .font(.callout)
-                    .fontWeight(.medium)
-                    .foregroundStyle(ZPTheme.textSecondary)
+                VStack(alignment: .leading, spacing: ZPTheme.spacing4) {
+                    Text("Create Vault")
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(ZPTheme.textPrimary)
+                        .accessibilityIdentifier("createVault.title")
 
-                HStack(alignment: .firstTextBaseline, spacing: ZPTheme.spacing12) {
-                    Text(folderDisplayText)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .foregroundStyle(folderURL == nil ? ZPTheme.textSecondary : ZPTheme.textPrimary)
-                        .accessibilityLabel(folderAccessibilityLabel)
-
-                    Spacer()
-
-                    Button("Choose Folder…") {
-                        Task { await chooseFolder() }
-                    }
-                    .disabled(isBusy)
-                    .accessibilityLabel("Choose vault folder")
+                    Text("Choose a folder and set the master password you’ll use to unlock this vault.")
+                        .foregroundStyle(ZPTheme.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
-                Text("Master Password")
-                    .font(.callout)
-                    .fontWeight(.medium)
-                    .foregroundStyle(ZPTheme.textSecondary)
+            VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+                VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+                    Text("Vault Location")
+                        .font(.callout)
+                        .fontWeight(.medium)
+                        .foregroundStyle(ZPTheme.textSecondary)
 
-                SecureField("Enter a master password", text: $password)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .password)
-                    .accessibilityLabel("Master password")
-                    .onChange(of: password) { _, newValue in
-                        updatePasswordStrength(for: newValue)
+                    HStack(alignment: .firstTextBaseline, spacing: ZPTheme.spacing12) {
+                        Text(folderDisplayText)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .foregroundStyle(folderURL == nil ? ZPTheme.textSecondary : ZPTheme.textPrimary)
+                            .accessibilityLabel(folderAccessibilityLabel)
+
+                        Spacer()
+
+                        Button("Choose Folder…") {
+                            Task { await chooseFolder() }
+                        }
+                        .disabled(isBusy)
+                        .accessibilityLabel("Choose vault folder")
                     }
+                    .padding(.horizontal, ZPTheme.spacing14)
+                    .padding(.vertical, ZPTheme.spacing12)
+                    .zpSurface(.inset, radius: ZPTheme.radiusLarge, shadow: false)
+                }
             }
+            .padding(ZPTheme.spacing18)
+            .zpSurface(.muted)
 
-            VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
-                Text("Confirm Password")
-                    .font(.callout)
-                    .fontWeight(.medium)
-                    .foregroundStyle(ZPTheme.textSecondary)
+            VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+                VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+                    Text("Master Password")
+                        .font(.callout)
+                        .fontWeight(.medium)
+                        .foregroundStyle(ZPTheme.textSecondary)
 
-                SecureField("Confirm your master password", text: $confirm)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .confirm)
-                    .accessibilityLabel("Confirm password")
+                    SecureField("Enter a master password", text: $password)
+                        .textFieldStyle(.plain)
+                        .focused($focusedField, equals: .password)
+                        .accessibilityLabel("Master password")
+                        .onChange(of: password) { _, newValue in
+                            updatePasswordStrength(for: newValue)
+                        }
+                        .padding(.horizontal, ZPTheme.spacing14)
+                        .padding(.vertical, ZPTheme.spacing12)
+                        .zpSurface(.inset, radius: ZPTheme.radiusLarge, shadow: false)
+                }
+
+                VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
+                    Text("Confirm Password")
+                        .font(.callout)
+                        .fontWeight(.medium)
+                        .foregroundStyle(ZPTheme.textSecondary)
+
+                    SecureField("Confirm your master password", text: $confirm)
+                        .textFieldStyle(.plain)
+                        .focused($focusedField, equals: .confirm)
+                        .accessibilityLabel("Confirm password")
+                        .padding(.horizontal, ZPTheme.spacing14)
+                        .padding(.vertical, ZPTheme.spacing12)
+                        .zpSurface(.inset, radius: ZPTheme.radiusLarge, shadow: false)
+                }
             }
+            .padding(ZPTheme.spacing18)
+            .zpSurface(.card)
 
             if !password.isEmpty {
                 PasswordStrengthBar(score: strengthScore)
@@ -131,6 +162,7 @@ struct CreateVaultView: View {
             }
         }
         .padding(ZPTheme.spacing24)
+        .background(ZPTheme.workspaceBackground)
         .frame(minWidth: ZPTheme.authSheetWidth, idealWidth: ZPTheme.authSheetWidth)
         .onAppear { focusedField = .password }
         .onDisappear { passwordStrengthTask?.cancel() }

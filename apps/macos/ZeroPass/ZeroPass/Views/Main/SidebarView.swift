@@ -46,6 +46,8 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .scrollContentBackground(.hidden)
+        .background(ZPTheme.sidebarBackground)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Vault categories")
     }
@@ -57,33 +59,55 @@ struct SidebarView: View {
         count: Int,
         tag: SidebarCategory
     ) -> some View {
-        if count > 0 {
-            Label(title, systemImage: systemImage)
-                .badge(count)
-                .tag(tag)
-                .accessibilityLabel("\(title), \(count) items")
-        } else {
-            Label(title, systemImage: systemImage)
-                .tag(tag)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("\(title), 0 items")
+        HStack(spacing: ZPTheme.spacing10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(count > 0 ? ZPTheme.textSecondary : ZPTheme.textMuted)
+                .frame(width: 16)
+
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+
+            Spacer()
+
+            if count > 0 {
+                Text("\(count)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(ZPTheme.textSecondary)
+                    .padding(.horizontal, ZPTheme.spacing8)
+                    .padding(.vertical, ZPTheme.spacing4)
+                    .background(ZPTheme.chipBackground, in: Capsule())
+            }
         }
+        .tag(tag)
+        .accessibilityLabel("\(title), \(count) items")
     }
 
     @ViewBuilder
     private func categoryRow(for type: VaultItemType) -> some View {
         let count = vault.count(for: type)
 
-        if count > 0 {
-            Label(type.displayName, systemImage: type.symbolName)
-                .badge(count)
-                .tag(SidebarCategory.type(type))
-                .accessibilityLabel("\(type.displayName), \(count) items")
-        } else {
-            Label(type.displayName, systemImage: type.symbolName)
-                .tag(SidebarCategory.type(type))
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("\(type.displayName), 0 items")
+        HStack(spacing: ZPTheme.spacing10) {
+            Image(systemName: type.symbolName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(count > 0 ? type.color : ZPTheme.textMuted)
+                .frame(width: 16)
+
+            Text(type.displayName)
+                .font(.system(size: 13, weight: .medium))
+
+            Spacer()
+
+            if count > 0 {
+                Text("\(count)")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(ZPTheme.textSecondary)
+                    .padding(.horizontal, ZPTheme.spacing8)
+                    .padding(.vertical, ZPTheme.spacing4)
+                    .background(ZPTheme.chipBackground, in: Capsule())
+            }
         }
+        .tag(SidebarCategory.type(type))
+        .accessibilityLabel("\(type.displayName), \(count) items")
     }
 }

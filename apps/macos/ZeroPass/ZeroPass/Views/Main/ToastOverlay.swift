@@ -9,18 +9,23 @@ struct ToastOverlay: ViewModifier {
     func body(content: Content) -> some View {
         content.overlay(alignment: .bottom) {
             if isShowing {
-                HStack(spacing: 6) {
+                HStack(spacing: ZPTheme.spacing8) {
                     Image(systemName: icon)
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(ZPTheme.success)
                     Text(message)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ZPTheme.textPrimary)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.horizontal, ZPTheme.spacing16)
+                .padding(.vertical, ZPTheme.spacing10)
                 .background(.ultraThinMaterial, in: Capsule())
-                .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
-                .padding(.bottom, 20)
+                .overlay(
+                    Capsule()
+                        .stroke(ZPTheme.panelBorderStrong, lineWidth: 1)
+                )
+                .shadow(color: ZPTheme.floatingShadow, radius: 12, y: 6)
+                .padding(.bottom, ZPTheme.spacing20)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .onAppear {
                     dismissTask?.cancel()

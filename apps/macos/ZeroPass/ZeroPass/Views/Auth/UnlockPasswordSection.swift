@@ -30,8 +30,8 @@ struct UnlockPasswordSection: View {
                     SecureField("Enter your master password", text: $password)
                 }
             }
-            .textFieldStyle(.roundedBorder)
-            .font(.body)
+            .textFieldStyle(.plain)
+            .font(.body.weight(.medium))
             .autocorrectionDisabled()
             .textContentType(.password)
             .privacySensitive()
@@ -39,11 +39,16 @@ struct UnlockPasswordSection: View {
             .onSubmit(onSubmit)
             .accessibilityLabel("Master password")
             .accessibilityHint("Enter the master password for this vault")
+            .padding(.horizontal, ZPTheme.spacing14)
+            .padding(.vertical, ZPTheme.spacing12)
+            .frame(minHeight: ZPTheme.authFieldHeight)
+            .zpSurface(showErrorHighlight ? .accent : .inset, radius: ZPTheme.radiusLarge, shadow: false)
 
             Toggle("Show Password", isOn: $showPassword)
                 .disabled(isBusy)
                 .accessibilityLabel("Show password")
                 .accessibilityHint("Reveals the characters in your master password field")
+                .toggleStyle(.checkbox)
 
             if capsLockOn {
                 Label("Caps Lock is on", systemImage: "capslock.fill")

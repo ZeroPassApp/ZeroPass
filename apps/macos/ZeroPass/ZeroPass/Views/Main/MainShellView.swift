@@ -20,6 +20,7 @@ struct MainShellView: View {
                 .navigationSplitViewColumnWidth(min: 180, ideal: 220)
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel("Sidebar")
+                .background(ZPTheme.sidebarBackground)
         } content: {
             ItemListView(
                 category: selectedCategory,
@@ -32,6 +33,7 @@ struct MainShellView: View {
             .navigationSplitViewColumnWidth(min: 260, ideal: 320)
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Item list")
+            .background(ZPTheme.panelBackgroundMuted)
         } detail: {
             if let item = selectedItem {
                 ItemDetailView(item: item, onEdit: { editingItem = item })
@@ -43,15 +45,17 @@ struct MainShellView: View {
                 } description: {
                     Text("Create your first item to start storing secrets securely.")
                 } actions: {
-                        Button("New Item") {
-                            showingNewItem = true
-                        }
+                    Button("New Item") {
+                        showingNewItem = true
+                    }
                 }
+                .background(ZPTheme.workspaceBackground)
             } else {
                 ContentUnavailableView(
                     "Select an Item",
                     systemImage: "tray",
                     description: Text("Choose an item from the list to view its details."))
+                .background(ZPTheme.workspaceBackground)
             }
         }
         .navigationTitle(vault.vaultName.isEmpty ? "ZeroPass" : vault.vaultName)
@@ -77,6 +81,7 @@ struct MainShellView: View {
                 .keyboardShortcut("n", modifiers: [.command])
             }
         }
+        .background(ZPTheme.workspaceBackground)
         .sheet(isPresented: $showingNewItem) {
             ItemEditorView(item: VaultItem.new(type: .login))
                 .environmentObject(vault)

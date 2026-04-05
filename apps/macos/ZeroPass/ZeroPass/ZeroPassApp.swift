@@ -56,7 +56,7 @@ struct ZeroPassApp: App {
                     )
                 }
         }
-        .defaultSize(width: 620, height: 480)
+        .defaultSize(width: 900, height: 620)
         .commands {
             CommandGroup(after: .newItem) {
                 Button(vault.hasVault ? "Choose Different Vault…" : "Open Vault…") {

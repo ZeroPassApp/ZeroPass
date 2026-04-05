@@ -28,7 +28,8 @@ struct SettingsView: View {
                 .tabItem { Label("About", systemImage: "info.circle") }
                 .tag(Tab.about)
         }
-        .padding(20)
+            .padding(24)
+            .background(ZPTheme.workspaceBackground)
         .frame(minWidth: 500, idealWidth: 550, minHeight: 400, idealHeight: 480)
     }
 }

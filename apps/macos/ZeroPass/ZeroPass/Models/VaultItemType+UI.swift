@@ -16,14 +16,14 @@ extension VaultItemType {
 
     var color: Color {
         switch self {
-        case .login: return .blue
-        case .apikey: return .purple
-        case .sshkey: return .green
-        case .note: return .yellow
-        case .creditcard: return .orange
-        case .identity: return .teal
-        case .passkey: return .indigo
-        case .custom: return .gray
+        case .login: return ZPTheme.dynamicColor(light: "#2D6DE6", dark: "#67B0FF")
+        case .apikey: return ZPTheme.dynamicColor(light: "#7A52D9", dark: "#B391FF")
+        case .sshkey: return ZPTheme.dynamicColor(light: "#0E9D73", dark: "#4FD6A3")
+        case .note: return ZPTheme.dynamicColor(light: "#A98100", dark: "#E1BF5F")
+        case .creditcard: return ZPTheme.dynamicColor(light: "#C46A24", dark: "#F1A565")
+        case .identity: return ZPTheme.dynamicColor(light: "#16838E", dark: "#5DD0D8")
+        case .passkey: return ZPTheme.dynamicColor(light: "#5664DB", dark: "#8EA1FF")
+        case .custom: return ZPTheme.dynamicColor(light: "#74808C", dark: "#8E9AA5")
         }
     }
 

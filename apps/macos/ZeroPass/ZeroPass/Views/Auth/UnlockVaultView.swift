@@ -36,7 +36,15 @@ struct UnlockVaultView: View {
                 vaultMenu
             }
         ) {
-            VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+            VStack(alignment: .leading, spacing: ZPTheme.spacing18) {
+                HStack(spacing: ZPTheme.spacing10) {
+                    unlockPill("Encrypted locally", systemImage: "lock.shield")
+                    unlockPill(autoLockSummary, systemImage: vault.autoLockTimeoutSeconds == 0 ? "lock.open.display" : "timer")
+                    if canUseBiometrics {
+                        unlockPill("Touch ID ready", systemImage: "touchid")
+                    }
+                }
+
                 VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
                     VStack(alignment: .leading, spacing: ZPTheme.spacing8) {
                         Text("Unlock Using")
@@ -78,15 +86,8 @@ struct UnlockVaultView: View {
                         }
                     }
                 }
-                .padding(ZPTheme.spacing16)
-                .background(
-                    ZPTheme.authPanelBackground,
-                    in: RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
-                        .stroke(ZPTheme.authPanelBorder, lineWidth: 1)
-                )
+                .padding(ZPTheme.spacing18)
+                .zpSurface(.elevated)
 
                 if let errorMessage, !errorMessage.isEmpty {
                     AuthMessageView(
@@ -97,7 +98,11 @@ struct UnlockVaultView: View {
                 }
 
                 HStack(alignment: .center, spacing: ZPTheme.spacing12) {
-                    Spacer()
+                    AuthSupportingNoteView(
+                        text: "Encrypted locally. ZeroPass never sends your master password anywhere.",
+                        systemImage: "checkmark.shield"
+                    )
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                     Button {
                         unlock()
@@ -118,11 +123,6 @@ struct UnlockVaultView: View {
                     .accessibilityLabel("Unlock vault")
                     .accessibilityHint("Unlocks the selected vault")
                 }
-
-                AuthSupportingNoteView(
-                    text: "Encrypted locally. ZeroPass never sends your master password anywhere.",
-                    systemImage: "checkmark.shield"
-                )
             }
         }
         .offset(x: shakeOffset)
@@ -170,6 +170,7 @@ struct UnlockVaultView: View {
         } label: {
             Label("Options", systemImage: "ellipsis.circle")
         }
+        .menuStyle(.button)
         .disabled(isBusy)
         .accessibilityLabel("Vault options")
     }
@@ -192,6 +193,18 @@ struct UnlockVaultView: View {
     private var biometricHelperText: String? {
         guard !canUseBiometrics, vault.isBiometricAvailable else { return nil }
         return "Touch ID is available on this Mac. Enable it in Security settings after unlocking once."
+    }
+
+    private var autoLockSummary: String {
+        guard vault.autoLockTimeoutSeconds > 0 else {
+            return "Manual lock"
+        }
+
+        let minutes = vault.autoLockTimeoutSeconds / 60
+        if minutes > 0 {
+            return "Auto-lock in \(minutes)m"
+        }
+        return "Auto-lock in \(vault.autoLockTimeoutSeconds)s"
     }
 
     private var isUnlockDisabled: Bool {
@@ -309,5 +322,19 @@ struct UnlockVaultView: View {
         case .recoveryPhrase:
             vault.requestUnlockRecoveryFocus()
         }
+    }
+
+    @ViewBuilder
+    private func unlockPill(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(ZPTheme.textSecondary)
+            .padding(.horizontal, ZPTheme.spacing10)
+            .padding(.vertical, ZPTheme.spacing8)
+            .background(ZPTheme.chipBackground, in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(ZPTheme.panelBorder, lineWidth: 1)
+            )
     }
 }

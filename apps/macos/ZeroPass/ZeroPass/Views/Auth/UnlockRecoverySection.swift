@@ -28,8 +28,8 @@ struct UnlockRecoverySection: View {
                 if mnemonic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Paste your recovery phrase here")
                         .foregroundStyle(ZPTheme.textTertiary)
-                        .padding(.top, 14)
-                        .padding(.horizontal, 14)
+                        .padding(.top, 16)
+                        .padding(.horizontal, 16)
                         .allowsHitTesting(false)
                 }
 
@@ -44,7 +44,8 @@ struct UnlockRecoverySection: View {
                     .accessibilityLabel("Recovery phrase")
                     .accessibilityHint("Paste your recovery phrase to unlock the vault")
             }
-            .background(ZPTheme.authInsetBackground, in: RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous))
+            .padding(2)
+            .background(borderColor.opacity(showErrorHighlight ? 0.12 : 0.08), in: RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
                     .stroke(borderColor, lineWidth: borderWidth)
@@ -71,7 +72,7 @@ struct UnlockRecoverySection: View {
         if showErrorHighlight {
             return ZPTheme.destructive
         }
-        return isRecoveryFocused ? ZPTheme.info : ZPTheme.authInsetBorder
+        return isRecoveryFocused ? ZPTheme.accent : ZPTheme.authInsetBorder
     }
 
     private var borderWidth: CGFloat {

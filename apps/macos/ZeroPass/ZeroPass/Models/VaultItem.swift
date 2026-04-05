@@ -47,3 +47,38 @@ struct VaultItem: Codable, Identifiable, Hashable {
         )
     }
 }
+
+extension VaultItem {
+    static let preferredIdentityFieldKeys = [
+        "username", "email", "user", "login", "cardholder", "full_name", "relying_party"
+    ]
+
+    static let preferredSecretFieldKeys = [
+        "password", "api_key", "api_secret", "secret", "private_key", "cvv", "card_number", "credential_id", "passphrase"
+    ]
+
+    static let preferredURLFieldKeys = ["url", "endpoint"]
+
+    var preferredIdentityField: (key: String, value: String)? {
+        firstNonEmptyField(in: Self.preferredIdentityFieldKeys)
+    }
+
+    var preferredSecretField: (key: String, value: String)? {
+        firstNonEmptyField(in: Self.preferredSecretFieldKeys)
+    }
+
+    var preferredURLField: (key: String, value: String)? {
+        firstNonEmptyField(in: Self.preferredURLFieldKeys)
+    }
+
+    func firstNonEmptyField(in keys: [String]) -> (key: String, value: String)? {
+        for key in keys {
+            let value = fields[key, default: ""].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !value.isEmpty {
+                return (key, value)
+            }
+        }
+
+        return nil
+    }
+}

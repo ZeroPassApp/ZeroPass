@@ -59,14 +59,27 @@ struct ItemEditorView: View, Identifiable {
         VStack(spacing: 0) {
             // Title
             HStack {
-                Image(systemName: item.type.symbolName)
-                    .font(.title3)
-                    .foregroundStyle(item.type.color)
-                    .accessibilityHidden(true)
+                ZStack {
+                    RoundedRectangle(cornerRadius: ZPTheme.radiusLarge, style: .continuous)
+                        .fill(item.type.color.opacity(0.14))
 
-                Text(item.id.isEmpty ? "New Item" : "Edit Item")
-                    .font(.title2)
-                    .bold()
+                    Image(systemName: item.type.symbolName)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(item.type.color)
+                        .accessibilityHidden(true)
+                }
+                .frame(width: 38, height: 38)
+
+                VStack(alignment: .leading, spacing: ZPTheme.spacing4) {
+                    Text(item.id.isEmpty ? "New Item" : "Edit Item")
+                        .font(.title2)
+                        .bold()
+                        .foregroundStyle(ZPTheme.textPrimary)
+
+                    Text("Securely encrypted locally")
+                        .font(.caption)
+                        .foregroundStyle(ZPTheme.textSecondary)
+                }
 
                 Spacer()
             }
@@ -163,12 +176,14 @@ struct ItemEditorView: View, Identifiable {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .background(ZPTheme.workspaceBackground)
 
             // Error + Actions
             VStack(spacing: 8) {
                 if let err = vault.lastError {
                     Text(err)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(ZPTheme.destructive)
                         .font(.callout)
                         .textSelection(.enabled)
                 }
@@ -192,7 +207,9 @@ struct ItemEditorView: View, Identifiable {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 16)
+            .background(ZPTheme.workspaceBackground)
         }
+        .background(ZPTheme.workspaceBackground)
         .frame(minWidth: 500, idealWidth: 600, minHeight: 480, idealHeight: 560)
         .popover(isPresented: $showPasswordGenerator) {
             PasswordGeneratorPopover(

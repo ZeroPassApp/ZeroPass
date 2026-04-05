@@ -112,8 +112,8 @@ private struct AuthWindowLayout: Equatable {
         switch state {
         case .noVault:
             kind = .noVault
-            minContentSize = CGSize(width: 520, height: 320)
-            idealContentSize = CGSize(width: 560, height: 360)
+            minContentSize = CGSize(width: 760, height: 560)
+            idealContentSize = CGSize(width: 900, height: 620)
         case .locked:
             kind = .locked
             minContentSize = CGSize(width: 560, height: 420)
