@@ -17,25 +17,28 @@ struct UnlockRecoverySection: View {
             ZStack(alignment: .topLeading) {
                 if mnemonic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Paste Recovery Phrase")
+                        .font(.subheadline)
                         .foregroundStyle(ZPTheme.textTertiary)
-                        .padding(.top, 14)
+                        .padding(.top, 13)
                         .padding(.horizontal, 14)
                         .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
 
                 TextEditor(text: $mnemonic)
-                    .font(.body)
+                    .font(.subheadline)
                     .scrollContentBackground(.hidden)
                     .focused($isRecoveryFocused)
                     .autocorrectionDisabled()
                     .privacySensitive()
+                    .foregroundStyle(ZPTheme.textPrimary)
                     .padding(8)
-                    .frame(minHeight: 104)
+                    .frame(minHeight: 96)
                     .accessibilityLabel("Recovery phrase")
                     .accessibilityHint("Paste your recovery phrase to unlock the vault")
             }
             .padding(2)
-            .background(borderColor.opacity(showErrorHighlight ? 0.12 : 0.08), in: RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous))
+            .background(ZPTheme.authInsetBackground, in: RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
                     .stroke(borderColor, lineWidth: borderWidth)
@@ -62,11 +65,11 @@ struct UnlockRecoverySection: View {
         if showErrorHighlight {
             return ZPTheme.destructive
         }
-        return isRecoveryFocused ? ZPTheme.accent : ZPTheme.authInsetBorder
+        return isRecoveryFocused ? ZPTheme.accent.opacity(0.35) : ZPTheme.authInsetBorder
     }
 
     private var borderWidth: CGFloat {
-        (showErrorHighlight || isRecoveryFocused) ? 1.5 : 1
+        (showErrorHighlight || isRecoveryFocused) ? 1.2 : 1
     }
 
     private var summaryIcon: String {

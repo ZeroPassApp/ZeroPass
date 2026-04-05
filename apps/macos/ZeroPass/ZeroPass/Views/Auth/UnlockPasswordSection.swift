@@ -26,7 +26,8 @@ struct UnlockPasswordSection: View {
                     }
                 }
                 .textFieldStyle(.plain)
-                .font(.callout.weight(.medium))
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(ZPTheme.textPrimary)
                 .autocorrectionDisabled()
                 .textContentType(.password)
                 .privacySensitive()
@@ -39,8 +40,8 @@ struct UnlockPasswordSection: View {
                     showPassword.toggle()
                 } label: {
                     Image(systemName: showPassword ? "eye.slash" : "eye")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(ZPTheme.accent)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(ZPTheme.textTertiary)
                         .frame(width: 24, height: 24)
                 }
                 .buttonStyle(.borderless)
@@ -49,13 +50,16 @@ struct UnlockPasswordSection: View {
                 .accessibilityValue(showPassword ? "Visible" : "Hidden")
                 .accessibilityHint(showPassword ? "Hide the master password" : "Show the master password")
             }
-            .padding(.horizontal, ZPTheme.spacing12)
-            .padding(.vertical, ZPTheme.spacing10)
-            .frame(minHeight: 40)
-            .zpSurface(.inset, radius: ZPTheme.radiusMedium, shadow: false)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .frame(minHeight: 46)
+            .background(
+                RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
+                    .fill(ZPTheme.authInsetBackground)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: ZPTheme.radiusMedium, style: .continuous)
-                    .stroke(showErrorHighlight ? ZPTheme.destructive : Color.clear, lineWidth: 1.5)
+                    .stroke(borderColor, lineWidth: borderWidth)
             )
 
             if capsLockOn {
@@ -74,5 +78,17 @@ struct UnlockPasswordSection: View {
                 isPasswordFocused = true
             }
         }
+    }
+
+    private var borderColor: Color {
+        if showErrorHighlight {
+            return ZPTheme.destructive
+        }
+
+        return isPasswordFocused ? ZPTheme.accent.opacity(0.35) : ZPTheme.authInsetBorder
+    }
+
+    private var borderWidth: CGFloat {
+        (showErrorHighlight || isPasswordFocused) ? 1.2 : 1
     }
 }

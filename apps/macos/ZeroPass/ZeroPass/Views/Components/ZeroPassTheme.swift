@@ -21,6 +21,7 @@ enum ZPTheme {
     static let accentSoft = accent.opacity(0.16)
     static let accentStrong = accent.opacity(0.24)
     static let accentGlow = accent.opacity(0.18)
+    static let unlockButton = dynamicColor(light: "#1A73E8", dark: "#3B8AF6")
 
     static let authSceneBackground = dynamicColor(light: "#F4F7FA", dark: "#121518")
     static let authSceneAccent = accent.opacity(0.08)

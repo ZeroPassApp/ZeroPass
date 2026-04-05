@@ -120,8 +120,8 @@ private struct AuthWindowLayout: Equatable {
             idealContentSize = CGSize(width: 680, height: 560)
         case .showingRecovery:
             kind = .showingRecovery
-            minContentSize = CGSize(width: 620, height: 520)
-            idealContentSize = CGSize(width: 680, height: 580)
+            minContentSize = CGSize(width: 620, height: 600)
+            idealContentSize = CGSize(width: 680, height: 680)
         case .unlocked:
             kind = .unlocked
             minContentSize = CGSize(width: 800, height: 500)
@@ -166,11 +166,7 @@ private struct AuthWindowLayout: Equatable {
 
     func applyAppearance(to window: NSWindow) {
         window.styleMask.insert(Self.authWindowMask)
-        if isCompactAuthState {
-            window.styleMask.remove(.fullSizeContentView)
-        } else {
-            window.styleMask.insert(.fullSizeContentView)
-        }
+        window.styleMask.insert(.fullSizeContentView)
 
         switch kind {
         case .locked:
@@ -181,7 +177,7 @@ private struct AuthWindowLayout: Equatable {
             window.title = "ZeroPass"
         }
         window.titleVisibility = .visible
-        window.titlebarAppearsTransparent = false
+        window.titlebarAppearsTransparent = isCompactAuthState
         window.isMovableByWindowBackground = false
         window.backgroundColor = .windowBackgroundColor
         window.isOpaque = true
