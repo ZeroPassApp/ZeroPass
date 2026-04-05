@@ -7,6 +7,7 @@ final class VaultClient: ObservableObject {
     private static let uiTestResetStateArgument = "UITEST_RESET_STATE"
 
     enum State: Equatable {
+        case restoring
         case noVault
         case locked
         case showingRecovery(mnemonic: String)
@@ -20,7 +21,7 @@ final class VaultClient: ObservableObject {
         var id: String { rawValue }
     }
 
-    @Published private(set) var state: State = .noVault
+    @Published private(set) var state: State
     @Published private(set) var unlockPasswordFocusRequestID = UUID()
     @Published private(set) var unlockRecoveryFocusRequestID = UUID()
     @Published var items: [VaultItem] = []
@@ -108,6 +109,14 @@ final class VaultClient: ObservableObject {
     init(keychain: any KeychainStoring = KeychainService()) {
 	    self.keychain = keychain
         Self.resetStateForUITestsIfNeeded()
+
+        // Check synchronously if a saved vault bookmark exists.
+        // If so, start in .restoring to avoid flashing WelcomeView.
+        if bookmarks.loadVaultURL() != nil {
+            self.state = .restoring
+        } else {
+            self.state = .noVault
+        }
 
         if UserDefaults.standard.object(forKey: "biometricUnlockEnabled") == nil {
             self.biometricUnlockEnabled = false
@@ -207,12 +216,16 @@ final class VaultClient: ObservableObject {
     }
 
     func restoreLastVaultIfAvailable() async {
-        guard state == .noVault else { return }
-        guard let url = bookmarks.loadVaultURL() else { return }
+        guard state == .noVault || state == .restoring else { return }
+        guard let url = bookmarks.loadVaultURL() else {
+            state = .noVault
+            return
+        }
 
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
             bookmarks.clear()
+            state = .noVault
             return
         }
 
@@ -220,6 +233,7 @@ final class VaultClient: ObservableObject {
             try await openVault(url)
         } catch {
             authFlowError = error.localizedDescription
+            state = .noVault
         }
     }
 

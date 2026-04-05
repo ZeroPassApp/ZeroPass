@@ -21,6 +21,8 @@ struct ContentView: View {
     @ViewBuilder
     private var currentScene: some View {
         switch vault.state {
+        case .restoring:
+            Color.clear
         case .noVault:
             WelcomeView()
         case .locked:

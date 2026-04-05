@@ -7,6 +7,14 @@ struct RecoveryPhraseView: View {
     @State private var copied = false
     @State private var confirmedSaved = false
 
+    private var recoveryCopyGuidance: String {
+        if vault.clipboardAutoClearEnabled {
+            return "A paper backup is safest. If you copy this phrase digitally, the clipboard clears in \(vault.clipboardAutoClearSeconds) seconds. Ensure the destination is encrypted and offline."
+        }
+
+        return "A paper backup is safest. If you copy this phrase digitally, the clipboard will not auto-clear automatically. Ensure the destination is encrypted and offline."
+    }
+
     var body: some View {
         AuthSceneScaffold(
             title: "Save Recovery Phrase",
@@ -15,7 +23,7 @@ struct RecoveryPhraseView: View {
             symbolName: "key.horizontal.fill",
             symbolTint: .orange
         ) {
-            VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+            VStack(alignment: .leading, spacing: ZPTheme.spacing14) {
                 AuthMessageView(
                     text: "This phrase is shown only now. Store it somewhere secure and offline if possible.",
                     systemImage: "exclamationmark.shield.fill",
@@ -24,17 +32,10 @@ struct RecoveryPhraseView: View {
 
                 RecoveryPhraseCardView(mnemonic: mnemonic)
 
-                VStack(alignment: .leading, spacing: ZPTheme.spacing12) {
-                    Text("A paper backup is safest. If you copy this phrase digitally, ensure the destination is encrypted and offline.")
-                        .font(.footnote)
-                        .foregroundStyle(ZPTheme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    HStack(spacing: ZPTheme.spacing8) {
-                        recoveryPill("One-Time Display", systemImage: "eye.slash")
-                        recoveryPill(vault.clipboardAutoClearEnabled ? "Clipboard clears in \(vault.clipboardAutoClearSeconds)s" : "Clipboard not auto-cleared", systemImage: "doc.on.clipboard")
-                    }
-                }
+                Text(recoveryCopyGuidance)
+                    .font(.footnote)
+                    .foregroundStyle(ZPTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: ZPTheme.spacing12) {
                     Button {
@@ -67,19 +68,5 @@ struct RecoveryPhraseView: View {
                     .accessibilityIdentifier("recoveryPhrase.confirmSavedToggle")
             }
         }
-    }
-
-    @ViewBuilder
-    private func recoveryPill(_ title: String, systemImage: String) -> some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(ZPTheme.textSecondary)
-            .padding(.horizontal, ZPTheme.spacing10)
-            .padding(.vertical, ZPTheme.spacing8)
-            .background(ZPTheme.chipBackground, in: Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(ZPTheme.panelBorder, lineWidth: 1)
-            )
     }
 }

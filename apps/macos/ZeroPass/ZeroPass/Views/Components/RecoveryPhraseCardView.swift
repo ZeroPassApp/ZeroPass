@@ -18,10 +18,10 @@ struct RecoveryPhraseCardView: View {
                 .font(.callout)
                 .foregroundStyle(ZPTheme.textSecondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(ZPTheme.spacing18)
+                .padding(ZPTheme.spacing16)
                 .zpSurface(.muted)
         } else {
-            VStack(alignment: .leading, spacing: ZPTheme.spacing16) {
+            VStack(alignment: .leading, spacing: ZPTheme.spacing14) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: ZPTheme.spacing4) {
                         Text("Recovery Phrase")
@@ -47,7 +47,7 @@ struct RecoveryPhraseCardView: View {
                         )
                 }
 
-                LazyVGrid(columns: columns, spacing: ZPTheme.spacing10) {
+                LazyVGrid(columns: columns, spacing: ZPTheme.spacing8) {
                     ForEach(Array(words.enumerated()), id: \.offset) { index, word in
                         HStack(alignment: .firstTextBaseline, spacing: ZPTheme.spacing8) {
                             Text("\(index + 1)")
@@ -60,7 +60,7 @@ struct RecoveryPhraseCardView: View {
                                 .fontWeight(.medium)
                                 .foregroundStyle(ZPTheme.textPrimary)
                         }
-                        .padding(.vertical, ZPTheme.spacing10)
+                        .padding(.vertical, ZPTheme.spacing8)
                         .padding(.horizontal, ZPTheme.spacing12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .zpSurface(.inset, radius: ZPTheme.radiusMedium, shadow: false)
@@ -74,7 +74,8 @@ struct RecoveryPhraseCardView: View {
                 }
             }
             .textSelection(.enabled)
-            .padding(ZPTheme.spacing18)
+            .privacySensitive()
+            .padding(ZPTheme.spacing16)
             .zpSurface(.elevated)
         }
     }

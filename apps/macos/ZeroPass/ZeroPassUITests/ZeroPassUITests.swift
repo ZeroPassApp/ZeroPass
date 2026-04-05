@@ -198,14 +198,13 @@ final class ZeroPassUITests: XCTestCase {
         openCreateVaultSheet(in: app)
         completeCreateVaultFlow(in: app, password: password)
 
-        let continueButton = app.buttons[UIElement.recoveryContinueButton]
-        XCTAssertTrue(
-            continueButton.waitForExistence(timeout: 15),
-            "Expected the recovery phrase screen to appear after creating a vault."
+        assertRecoveryPhrasePrimaryControlsVisible(
+            in: app,
+            screenDescription: "after creating a vault"
         )
 
+        let continueButton = app.buttons[UIElement.recoveryContinueButton]
         let confirmSavedToggle = recoveryConfirmSavedToggle(in: app)
-        XCTAssertTrue(confirmSavedToggle.waitForExistence(timeout: 5))
         confirmSavedToggle.click()
 
         continueButton.click()
@@ -290,14 +289,13 @@ final class ZeroPassUITests: XCTestCase {
         openCreateVaultSheet(in: app)
         completeCreateVaultFlow(in: app, password: password)
 
-        let continueButton = app.buttons[UIElement.recoveryContinueButton]
-        XCTAssertTrue(
-            continueButton.waitForExistence(timeout: 15),
-            "Expected the recovery phrase screen while provisioning a vault fixture."
+        assertRecoveryPhrasePrimaryControlsVisible(
+            in: app,
+            screenDescription: "while provisioning a vault fixture"
         )
 
+        let continueButton = app.buttons[UIElement.recoveryContinueButton]
         let confirmSavedToggle = recoveryConfirmSavedToggle(in: app)
-        XCTAssertTrue(confirmSavedToggle.waitForExistence(timeout: 5))
         confirmSavedToggle.click()
 
         continueButton.click()
@@ -373,6 +371,33 @@ final class ZeroPassUITests: XCTestCase {
         return app.descendants(matching: .any)
             .matching(identifier: UIElement.recoveryConfirmSavedToggle)
             .firstMatch
+    }
+
+    private func assertRecoveryPhrasePrimaryControlsVisible(
+        in app: XCUIApplication,
+        screenDescription: String,
+        timeout: TimeInterval = 15
+    ) {
+        let continueButton = app.buttons[UIElement.recoveryContinueButton]
+        XCTAssertTrue(
+            continueButton.waitForExistence(timeout: timeout),
+            "Expected the recovery phrase screen to appear \(screenDescription)."
+        )
+
+        let confirmSavedToggle = recoveryConfirmSavedToggle(in: app)
+        XCTAssertTrue(
+            confirmSavedToggle.waitForExistence(timeout: 5),
+            "Expected the recovery phrase confirmation toggle to appear \(screenDescription)."
+        )
+
+        XCTAssertTrue(
+            waitForHittable(of: confirmSavedToggle, timeout: 5),
+            "Expected the recovery phrase confirmation toggle to be visible without scrolling \(screenDescription)."
+        )
+        XCTAssertTrue(
+            waitForHittable(of: continueButton, timeout: 5),
+            "Expected the recovery phrase continue button to be visible without scrolling \(screenDescription)."
+        )
     }
 
     private func waitForLockedState(in app: XCUIApplication) {
@@ -493,6 +518,12 @@ final class ZeroPassUITests: XCTestCase {
 
     private func waitForNonExistence(of element: XCUIElement, timeout: TimeInterval) -> Bool {
         let predicate = NSPredicate(format: "exists == false")
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func waitForHittable(of element: XCUIElement, timeout: TimeInterval) -> Bool {
+        let predicate = NSPredicate(format: "hittable == true")
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }

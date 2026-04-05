@@ -82,6 +82,7 @@ private struct WindowLayoutObserver: NSViewRepresentable {
 
 private struct AuthWindowLayout: Equatable {
     enum Kind: Equatable {
+        case restoring
         case noVault
         case locked
         case showingRecovery
@@ -101,7 +102,7 @@ private struct AuthWindowLayout: Equatable {
 
     private var isCompactAuthState: Bool {
         switch kind {
-        case .noVault, .locked, .showingRecovery:
+        case .restoring, .noVault, .locked, .showingRecovery:
             return true
         case .unlocked:
             return false
@@ -110,6 +111,10 @@ private struct AuthWindowLayout: Equatable {
 
     init(state: VaultClient.State) {
         switch state {
+        case .restoring:
+            kind = .restoring
+            minContentSize = CGSize(width: 620, height: 500)
+            idealContentSize = CGSize(width: 680, height: 560)
         case .noVault:
             kind = .noVault
             minContentSize = CGSize(width: 760, height: 560)
@@ -148,7 +153,7 @@ private struct AuthWindowLayout: Equatable {
             } else {
                 targetSize = idealContentSize
             }
-        case .noVault, .locked, .showingRecovery:
+        case .restoring, .noVault, .locked, .showingRecovery:
             targetSize = idealContentSize
         }
 
@@ -173,6 +178,8 @@ private struct AuthWindowLayout: Equatable {
             window.title = "Unlock Vault"
         case .showingRecovery:
             window.title = "Recovery Phrase"
+        case .restoring:
+            window.title = "ZeroPass"
         case .noVault, .unlocked:
             window.title = "ZeroPass"
         }
