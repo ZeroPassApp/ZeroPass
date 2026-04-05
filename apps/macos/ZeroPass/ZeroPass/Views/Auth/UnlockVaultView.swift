@@ -16,8 +16,7 @@ struct UnlockVaultView: View {
     @State private var capsLockOn = false
     @State private var showCloseConfirmation = false
     @State private var showOpenVaultSheet = false
-
-    private let footnoteHorizontalPadding: CGFloat = 16
+    @State private var flagsMonitor: Any?
 
     private enum UnlockMethod: String, CaseIterable, Identifiable {
         case password = "Master Password"
@@ -55,6 +54,8 @@ struct UnlockVaultView: View {
                 bottomFootnoteBar
             }
         }
+        // .toolbar routes items to the NSWindow toolbar even without NavigationStack,
+        // which is correct here since ContentView uses mutually exclusive state switching.
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -85,6 +86,16 @@ struct UnlockVaultView: View {
         .onAppear {
             updateCapsLock()
             errorMessage = nil
+            flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [self] event in
+                capsLockOn = selectedMethod == .password && event.modifierFlags.contains(.capsLock)
+                return event
+            }
+        }
+        .onDisappear {
+            if let monitor = flagsMonitor {
+                NSEvent.removeMonitor(monitor)
+                flagsMonitor = nil
+            }
         }
         .onChange(of: selectedMethod) { _, newValue in
             errorMessage = nil
@@ -175,6 +186,8 @@ struct UnlockVaultView: View {
                 }
             }
 
+            .animation(.easeInOut(duration: 0.15), value: selectedMethod)
+
             if let errorMessage, !errorMessage.isEmpty {
                 HStack(spacing: ZPTheme.spacing8) {
                     Image(systemName: "exclamationmark.triangle.fill")
@@ -238,14 +251,14 @@ struct UnlockVaultView: View {
         .padding(.vertical, ZPTheme.spacing24)
         .frame(maxWidth: 360)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: ZPTheme.radiusPanel, style: .continuous)
                 .fill(ZPTheme.panelBackgroundElevated)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: ZPTheme.radiusPanel, style: .continuous)
                 .stroke(ZPTheme.panelBorderStrong, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.18), radius: 18, y: 10)
+        .shadow(color: Color.black.opacity(0.18), radius: ZPTheme.radiusPanel, y: 10)
     }
 
     private var footerMeta: some View {
@@ -462,7 +475,7 @@ struct UnlockVaultView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, footnoteHorizontalPadding)
+        .padding(.horizontal, ZPTheme.spacing16)
         .padding(.vertical, ZPTheme.spacing8)
         .background(ZPTheme.authSceneBackground.opacity(0.94))
         .overlay(alignment: .top) {

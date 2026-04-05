@@ -90,6 +90,7 @@ enum ZPTheme {
     static let radiusMedium: CGFloat = 12
     static let radiusLarge: CGFloat = 16
     static let radiusXLarge: CGFloat = 22
+    static let radiusPanel: CGFloat = 18
 
     // MARK: Sizing
 
