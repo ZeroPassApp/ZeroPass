@@ -22,6 +22,14 @@ coverage.html
 /cli
 /syncserver
 
+# Node / Frontend
+node_modules/
+package-lock.json
+
+# Rust / Tauri
+target/
+gen/
+
 # bridge build outputs
 bridge/*.a
 bridge/*.h
