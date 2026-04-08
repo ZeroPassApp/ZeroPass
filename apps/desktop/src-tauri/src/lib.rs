@@ -2,6 +2,7 @@ mod bridge;
 mod commands;
 mod error;
 mod state;
+mod tray;
 
 use state::VaultState;
 use tauri_plugin_autostart::MacosLauncher;
@@ -20,6 +21,10 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_store::Builder::new().build())
         .manage(VaultState::new())
+        .setup(|app| {
+            tray::setup_tray(app.handle())?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             commands::vault::create_vault,
             commands::vault::open_vault,

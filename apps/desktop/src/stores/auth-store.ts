@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { AuthState } from "../lib/types";
 import * as cmd from "../lib/commands";
+import { saveLastVaultPath, getLastVaultPath, clearLastVaultPath } from "../lib/vault-persistence";
 
 /** Extract a human-readable message from Tauri command errors.
  *  Tauri v2 serializes Rust enum errors as JSON objects, so
@@ -34,6 +35,7 @@ interface AuthStore {
     recoveryPhrase: string | null;
 
     // Actions
+    restore: () => Promise<void>;
     setError: (error: string | null) => void;
     createVault: (path: string, password: string) => Promise<void>;
     openVault: (path: string) => Promise<void>;
@@ -51,6 +53,35 @@ export const useAuthStore = create<AuthStore>((set) => ({
     error: null,
     recoveryPhrase: null,
 
+    restore: async () => {
+        try {
+            console.log("[auth-store] restore: starting...");
+            const savedPath = await getLastVaultPath();
+            console.log("[auth-store] restore: savedPath =", savedPath);
+            if (!savedPath) {
+                console.log("[auth-store] restore: no saved path, going to noVault");
+                set({ state: "noVault" });
+                return;
+            }
+            console.log("[auth-store] restore: opening vault at", savedPath);
+            await cmd.openVault(savedPath);
+            console.log("[auth-store] restore: vault opened, going to locked");
+            set({ state: "locked", vaultPath: savedPath });
+        } catch (e) {
+            console.error("[auth-store] restore: error", e);
+            // "vault is already open" means a prior call already opened it — treat as success
+            const msg = extractError(e);
+            if (msg.includes("already open")) {
+                console.log("[auth-store] restore: vault already open, going to locked");
+                const savedPath = await getLastVaultPath();
+                set({ state: "locked", vaultPath: savedPath });
+                return;
+            }
+            await clearLastVaultPath();
+            set({ state: "noVault" });
+        }
+    },
+
     setError: (error) => set({ error }),
 
     createVault: async (path, password) => {
@@ -61,6 +92,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
             await cmd.unlockVault(password);
             // Get recovery phrase
             const vaultKey = await cmd.getVaultKey();
+            await saveLastVaultPath(path);
             set({
                 state: "showingRecovery",
                 vaultPath: path,
@@ -75,6 +107,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
         try {
             set({ error: null });
             await cmd.openVault(path);
+            await saveLastVaultPath(path);
             set({ state: "locked", vaultPath: path });
         } catch (e) {
             set({ error: extractError(e) });

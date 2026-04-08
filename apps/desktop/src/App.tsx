@@ -9,11 +9,9 @@ import { ToastOverlay } from "./components/common/toast-overlay";
 function App() {
     const authState = useAuthStore((s) => s.state);
 
-    // On mount, determine initial state
+    // On mount, restore last opened vault or show welcome
     useEffect(() => {
-        // For now, go straight to noVault state
-        // In the future, check if a default vault path is saved
-        useAuthStore.getState().reset();
+        useAuthStore.getState().restore();
     }, []);
 
     return (
